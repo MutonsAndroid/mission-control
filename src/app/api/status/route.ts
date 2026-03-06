@@ -201,10 +201,9 @@ async function getSystemStatus(workspaceId: number) {
       const { stdout } = await runCommand('sysctl', ['-n', 'kern.boottime'], {
         timeoutMs: 3000
       })
-      // Output format: { sec = 1234567890, usec = 0 } ...
       const match = stdout.match(/sec\s*=\s*(\d+)/)
       if (match) {
-        status.uptime = Date.now() - parseInt(match[1]) * 1000
+        status.uptime = Date.now() - parseInt(match[1], 10) * 1000
       }
     } else {
       const { stdout } = await runCommand('uptime', ['-s'], {
@@ -218,7 +217,7 @@ async function getSystemStatus(workspaceId: number) {
   }
 
   try {
-    // Memory info (cross-platform)
+    // Memory info (cross-platform: os module on darwin, free on Linux)
     if (process.platform === 'darwin') {
       const totalBytes = os.totalmem()
       const freeBytes = os.freemem()
@@ -245,13 +244,14 @@ async function getSystemStatus(workspaceId: number) {
   }
 
   try {
-    // Disk info
+    // Disk info (df works on macOS and Linux)
     const { stdout: diskOutput } = await runCommand('df', ['-h', '/'], {
       timeoutMs: 3000
     })
-    const lastLine = diskOutput.trim().split('\n').pop() || ''
-    const diskParts = lastLine.split(/\s+/)
-    if (diskParts.length >= 4) {
+    const lines = diskOutput.trim().split('\n').filter(Boolean)
+    const lastLine = lines[lines.length - 1] || ''
+    const diskParts = lastLine.split(/\s+/).filter(Boolean)
+    if (diskParts.length >= 5) {
       status.disk = {
         total: diskParts[1],
         used: diskParts[2],
@@ -442,10 +442,8 @@ async function performHealthCheck() {
     const lines = stdout.trim().split('\n')
     const last = lines[lines.length - 1] || ''
     const parts = last.split(/\s+/)
-    // On macOS capacity is col 4 ("85%"), on Linux use% is col 4 as well
     const pctField = parts.find(p => p.endsWith('%')) || '0%'
-    const usagePercent = parseInt(pctField.replace('%', '') || '0')
-    
+    const usagePercent = parseInt(pctField.replace('%', '') || '0', 10)
     health.checks.push({
       name: 'Disk Space',
       status: usagePercent < 90 ? 'healthy' : usagePercent < 95 ? 'warning' : 'critical',
@@ -465,16 +463,15 @@ async function performHealthCheck() {
     if (process.platform === 'darwin') {
       const totalBytes = os.totalmem()
       const freeBytes = os.freemem()
-      usagePercent = Math.round(((totalBytes - freeBytes) / totalBytes) * 100)
+      usagePercent = totalBytes > 0 ? Math.round(((totalBytes - freeBytes) / totalBytes) * 100) : 0
     } else {
       const { stdout } = await runCommand('free', ['-m'], { timeoutMs: 3000 })
       const memLine = stdout.split('\n').find((line) => line.startsWith('Mem:'))
       const parts = (memLine || '').split(/\s+/)
-      const total = parseInt(parts[1] || '0')
-      const available = parseInt(parts[6] || '0')
-      usagePercent = Math.round(((total - available) / total) * 100)
+      const total = parseInt(parts[1] || '0', 10)
+      const available = parseInt(parts[6] || '0', 10)
+      usagePercent = total > 0 ? Math.round(((total - available) / total) * 100) : 0
     }
-
     health.checks.push({
       name: 'Memory Usage',
       status: usagePercent < 90 ? 'healthy' : usagePercent < 95 ? 'warning' : 'critical',

@@ -45,6 +45,7 @@ pnpm dev                # http://localhost:3000
 
 Initial login is seeded from `AUTH_USER` / `AUTH_PASS` on first run.
 If `AUTH_PASS` contains `#`, quote it (e.g. `AUTH_PASS="my#password"`) or use `AUTH_PASS_B64`.
+In development, if `AUTH_PASS` is unset a default `admin`/`dev` user is seeded; `.env.example`'s default password is also allowed for first-run.
 
 ## Project Status
 
@@ -383,7 +384,7 @@ See [`.env.example`](.env.example) for the complete list. Key variables:
 | `OPENCLAW_GATEWAY_TOKEN` | No | Server-side gateway auth token |
 | `OPENCLAW_TOOLS_PROFILE` | No | Tools profile for `sessions_spawn` (recommended: `coding`) |
 | `NEXT_PUBLIC_GATEWAY_TOKEN` | No | Browser-side gateway auth token (must use `NEXT_PUBLIC_` prefix) |
-| `NEXT_PUBLIC_GATEWAY_CLIENT_ID` | No | Gateway UI client ID for websocket handshake (default: `openclaw-control-ui`) |
+| `NEXT_PUBLIC_GATEWAY_CLIENT_ID` | No | Deprecated. OpenClaw requires `client.id: "openclaw-control-ui"` (hardcoded in websocket.ts). |
 | `OPENCLAW_MEMORY_DIR` | No | Memory browser root (see note below) |
 | `MC_CLAUDE_HOME` | No | Path to `~/.claude` directory (default: `~/.claude`) |
 | `MC_TRUSTED_PROXIES` | No | Comma-separated trusted proxy IPs for XFF parsing |

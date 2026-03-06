@@ -264,11 +264,12 @@ function MobileConnectionDot({
   connection,
   onReconnect,
 }: {
-  connection: { isConnected: boolean; reconnectAttempts: number }
+  connection: { isConnected: boolean; isConnecting?: boolean; reconnectAttempts: number; errorMessage?: string }
   onReconnect: () => void
 }) {
   const { dashboardMode } = useMissionControl()
   const isLocal = dashboardMode === 'local'
+  const isConnecting = connection.isConnecting ?? false
   const isReconnecting = !connection.isConnected && connection.reconnectAttempts > 0
 
   let dotClass: string
@@ -280,9 +281,12 @@ function MobileConnectionDot({
   } else if (connection.isConnected) {
     dotClass = 'bg-green-500'
     title = 'Gateway connected'
-  } else if (isReconnecting) {
+  } else if (isConnecting || isReconnecting) {
     dotClass = 'bg-amber-500 animate-pulse'
-    title = `Reconnecting (${connection.reconnectAttempts})`
+    title = isReconnecting ? `Reconnecting (${connection.reconnectAttempts})` : 'Connecting...'
+  } else if (connection.errorMessage) {
+    dotClass = 'bg-red-500 animate-pulse'
+    title = connection.errorMessage
   } else {
     dotClass = 'bg-red-500 animate-pulse'
     title = 'Gateway disconnected — tap to reconnect'
@@ -305,11 +309,12 @@ function ConnectionBadge({
   connection,
   onReconnect,
 }: {
-  connection: { isConnected: boolean; reconnectAttempts: number; latency?: number }
+  connection: { isConnected: boolean; isConnecting?: boolean; reconnectAttempts: number; latency?: number; errorMessage?: string }
   onReconnect: () => void
 }) {
   const { dashboardMode } = useMissionControl()
   const isLocal = dashboardMode === 'local'
+  const isConnecting = connection.isConnecting ?? false
   const isReconnecting = !connection.isConnected && connection.reconnectAttempts > 0
 
   if (isLocal) {
@@ -328,9 +333,12 @@ function ConnectionBadge({
   if (connection.isConnected) {
     dotClass = 'bg-green-500'
     label = connection.latency != null ? `${connection.latency}ms` : 'Online'
-  } else if (isReconnecting) {
+  } else if (isConnecting || isReconnecting) {
     dotClass = 'bg-amber-500 animate-pulse'
-    label = `Connecting... (${connection.reconnectAttempts})`
+    label = isReconnecting ? `Reconnecting (${connection.reconnectAttempts})` : 'Connecting...'
+  } else if (connection.errorMessage) {
+    dotClass = 'bg-red-500 animate-pulse'
+    label = 'Error'
   } else {
     dotClass = 'bg-red-500 animate-pulse'
     label = 'Disconnected'
@@ -344,12 +352,12 @@ function ConnectionBadge({
           ? 'cursor-default'
           : 'hover:bg-secondary cursor-pointer'
       }`}
-      title={connection.isConnected ? 'Gateway connected' : 'Click to reconnect'}
+      title={connection.isConnected ? 'Gateway connected' : connection.errorMessage ?? 'Click to reconnect'}
     >
       <span className="text-muted-foreground">Gateway</span>
       <span className={`w-1.5 h-1.5 rounded-full ${dotClass}`} />
       <span className={`font-medium font-mono-tight ${
-        connection.isConnected ? 'text-green-400' : isReconnecting ? 'text-amber-400' : 'text-red-400'
+        connection.isConnected ? 'text-green-400' : (isConnecting || isReconnecting) ? 'text-amber-400' : 'text-red-400'
       }`}>
         {label}
       </span>

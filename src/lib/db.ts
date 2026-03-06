@@ -119,9 +119,17 @@ function seedAdminUserFromEnv(dbConn: Database.Database): void {
   if (count > 0) return
 
   const username = process.env.AUTH_USER || 'admin'
-  const password = resolveSeedAuthPassword()
+  let password = resolveSeedAuthPassword()
 
-  if (!password) {
+  // In development, allow first-run login when AUTH_PASS is unset
+  const isDev = process.env.NODE_ENV === 'development'
+  if (!password && isDev) {
+    password = 'dev'
+    logger.warn(
+      'AUTH_PASS is not set — seeding admin with password "dev" for development. ' +
+      'Set AUTH_PASS before production.'
+    )
+  } else if (!password) {
     logger.warn(
       'AUTH_PASS is not set — skipping admin user seeding. ' +
       'Set AUTH_PASS (quote values containing #) or AUTH_PASS_B64 in your environment.'
@@ -129,13 +137,19 @@ function seedAdminUserFromEnv(dbConn: Database.Database): void {
     return
   }
 
-  if (INSECURE_PASSWORDS.has(password)) {
+  if (INSECURE_PASSWORDS.has(password) && !isDev) {
     logger.warn(
       `AUTH_PASS matches a known insecure default ("${password}"). ` +
       'Please set a strong, unique password in your .env file. ' +
       'Skipping admin user seeding until credentials are changed.'
     )
     return
+  }
+  if (INSECURE_PASSWORDS.has(password) && isDev) {
+    logger.warn(
+      `Seeding admin with default password in development. ` +
+      'Set AUTH_PASS to a strong value before production.'
+    )
   }
 
   const displayName = username.charAt(0).toUpperCase() + username.slice(1)

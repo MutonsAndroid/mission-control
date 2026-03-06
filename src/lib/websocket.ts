@@ -17,7 +17,11 @@ const log = createClientLogger('WebSocket')
 
 // Gateway protocol version (v3 required by OpenClaw 2026.x)
 const PROTOCOL_VERSION = 3
-const DEFAULT_GATEWAY_CLIENT_ID = process.env.NEXT_PUBLIC_GATEWAY_CLIENT_ID || 'openclaw-control-ui'
+// OpenClaw gateway schema (client-info.ts) accepts only these client IDs:
+// webchat-ui, openclaw-control-ui, webchat, cli, gateway-client, openclaw-macos,
+// openclaw-ios, openclaw-android, node-host, test, fingerprint, openclaw-probe.
+// Mission Control is a control-plane UI → use openclaw-control-ui.
+export const GATEWAY_CLIENT_ID = 'openclaw-control-ui'
 
 // Heartbeat configuration
 const PING_INTERVAL_MS = 30_000
@@ -106,7 +110,7 @@ export function useWebSocket() {
       return 'Gateway rejected device signature. Clear local device identity in the browser and reconnect.'
     }
     if (normalized.includes('invalid connect params') || normalized.includes('/client/id')) {
-      return 'Gateway rejected client identity params. Ensure NEXT_PUBLIC_GATEWAY_CLIENT_ID is set to openclaw-control-ui and reconnect.'
+      return 'Gateway rejected client identity params. Mission Control uses openclaw-control-ui; check gateway controlUi.allowedOrigins.'
     }
     if (normalized.includes('auth rate limit') || normalized.includes('rate limited')) {
       return 'Gateway authentication is rate limited. Wait briefly, then reconnect.'
@@ -194,7 +198,7 @@ export function useWebSocket() {
 
     const cachedToken = getCachedDeviceToken()
 
-    const clientId = DEFAULT_GATEWAY_CLIENT_ID
+    const clientId = GATEWAY_CLIENT_ID
     const clientMode = 'ui'
     const role = 'operator'
     const scopes = ['operator.admin']
@@ -231,27 +235,39 @@ export function useWebSocket() {
       }
     }
 
+    const client = {
+      id: 'openclaw-control-ui' as const,
+      displayName: 'Mission Control',
+      version: APP_VERSION,
+      platform: 'web' as const,
+      mode: clientMode,
+      instanceId: `mc-${Date.now()}`,
+    }
+    if (client.id !== GATEWAY_CLIENT_ID) {
+      throw new Error(`Gateway handshake: client.id must be "openclaw-control-ui", got "${client.id}"`)
+    }
+    const gatewayToken = authToken || ''
+    const params = {
+      minProtocol: PROTOCOL_VERSION,
+      maxProtocol: PROTOCOL_VERSION,
+      client,
+      role,
+      scopes,
+      auth: { token: gatewayToken },
+      device,
+      deviceToken: cachedToken || undefined,
+    }
+    const safeParams = { ...params, auth: params.auth ? { token: params.auth.token ? '[REDACTED]' : '' } : undefined }
+    console.debug('WebSocket connect params:', safeParams)
     const connectRequest = {
-      type: 'req',
-      method: 'connect',
+      type: 'req' as const,
+      method: 'connect' as const,
       id: nextRequestId(),
-      params: {
-        minProtocol: PROTOCOL_VERSION,
-        maxProtocol: PROTOCOL_VERSION,
-        client: {
-          id: clientId,
-          displayName: 'Mission Control',
-          version: APP_VERSION,
-          platform: 'web',
-          mode: clientMode,
-          instanceId: `mc-${Date.now()}`
-        },
-        role,
-        scopes,
-        auth: authToken ? { token: authToken } : undefined,
-        device,
-        deviceToken: cachedToken || undefined,
-      }
+      params,
+    }
+    if (process.env.NODE_ENV === 'development') {
+      const safeLog = { ...params, auth: params.auth ? { token: '[REDACTED]' } : undefined, device: params.device ? { id: params.device.id, publicKey: '[REDACTED]', signature: '[REDACTED]', signedAt: params.device.signedAt, nonce: params.device.nonce } : undefined }
+      log.debug('Connect params (secrets redacted):', JSON.stringify(safeLog, null, 2))
     }
     log.info('Sending connect handshake')
     ws.send(JSON.stringify(connectRequest))
@@ -359,8 +375,10 @@ export function useWebSocket() {
       }
       setConnection({
         isConnected: true,
+        isConnecting: false,
         lastConnected: new Date(),
-        reconnectAttempts: 0
+        reconnectAttempts: 0,
+        errorMessage: undefined
       })
       // Start heartbeat after successful handshake
       startHeartbeat()
@@ -397,6 +415,7 @@ export function useWebSocket() {
 
       if (nonRetryable) {
         nonRetryableErrorRef.current = rawMessage
+        setConnection({ isConnecting: false, errorMessage: help })
         addNotification({
           id: Date.now(),
           recipient: 'operator',
@@ -538,6 +557,8 @@ export function useWebSocket() {
       return // Already connected or connecting
     }
 
+    setConnection({ isConnecting: true, errorMessage: undefined })
+
     let urlToken = ''
     try {
       const parsedInput = new URL(url, window.location.origin)
@@ -562,7 +583,9 @@ export function useWebSocket() {
         // Don't set isConnected yet - wait for handshake
         setConnection({
           url: normalizedUrl,
-          reconnectAttempts: 0
+          reconnectAttempts: 0,
+          isConnecting: true,
+          errorMessage: undefined
         })
         // Wait for connect.challenge from server
         log.debug('Waiting for connect challenge')
@@ -586,7 +609,7 @@ export function useWebSocket() {
 
       ws.onclose = (event) => {
         log.info(`Disconnected from Gateway: ${event.code} ${event.reason}`)
-        setConnection({ isConnected: false })
+        setConnection({ isConnected: false, isConnecting: false })
         handshakeCompleteRef.current = false
         stopHeartbeat()
 
@@ -691,9 +714,10 @@ export function useWebSocket() {
   }, [])
 
   const reconnect = useCallback(() => {
+    nonRetryableErrorRef.current = null // Allow retry after user-initiated reconnect
     disconnect()
     if (reconnectUrl.current) {
-      setTimeout(() => connect(reconnectUrl.current, authTokenRef.current), 1000)
+      setTimeout(() => connect(reconnectUrl.current, authTokenRef.current), 500)
     }
   }, [connect, disconnect])
 
