@@ -533,7 +533,7 @@ function AgentDetailModalPhase3({
   useEffect(() => {
     const loadTemplates = async () => {
       try {
-        const response = await fetch(`/api/agents/${agent.name}/soul`, {
+        const response = await fetch(`/api/agents/${agent.id}/soul`, {
           method: 'PATCH'
         })
         if (response.ok) {
@@ -548,13 +548,13 @@ function AgentDetailModalPhase3({
     if (activeTab === 'soul') {
       loadTemplates()
     }
-  }, [activeTab, agent.name])
+  }, [activeTab, agent.id])
 
   // Perform heartbeat check
   const performHeartbeat = async () => {
     setLoadingHeartbeat(true)
     try {
-      const response = await fetch(`/api/agents/${agent.name}/heartbeat`)
+      const response = await fetch(`/api/agents/${agent.id}/heartbeat`)
       if (response.ok) {
         const data = await response.json()
         setHeartbeatData(data)
@@ -588,7 +588,7 @@ function AgentDetailModalPhase3({
 
   const handleSoulSave = async (content: string, templateName?: string) => {
     try {
-      const response = await fetch(`/api/agents/${agent.name}/soul`, {
+      const response = await fetch(`/api/agents/${agent.id}/soul`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -608,7 +608,7 @@ function AgentDetailModalPhase3({
 
   const handleMemorySave = async (content: string, append: boolean = false) => {
     try {
-      const response = await fetch(`/api/agents/${agent.name}/memory`, {
+      const response = await fetch(`/api/agents/${agent.id}/memory`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
