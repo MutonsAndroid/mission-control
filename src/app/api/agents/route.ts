@@ -96,6 +96,11 @@ export async function GET(request: NextRequest) {
     }
     const countRow = db.prepare(countQuery).get(...countParams) as { total: number };
 
+    logger.debug(
+      { workspaceId, total: countRow.total, agentNames: agentsWithStats.map(a => a.name) },
+      'GET /api/agents: agent list'
+    );
+
     return NextResponse.json({
       agents: agentsWithStats,
       total: countRow.total,

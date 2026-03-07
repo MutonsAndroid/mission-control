@@ -1,7 +1,8 @@
 /**
  * Agent Config Sync
  *
- * Reads agents from openclaw.json and upserts them into the MC database.
+ * Discovers agents from OpenClaw runtime (gateway/fs) first, then openclaw.json fallback.
+ * Upserts into the MC database.
  * Used by both the /api/agents/sync endpoint and the startup scheduler.
  */
 
@@ -13,6 +14,7 @@ import { existsSync, readFileSync } from 'fs'
 import { resolveWithin } from './paths'
 import { logger } from './logger'
 import { parseJsonRelaxed } from './json-relaxed'
+import { discoverRuntimeAgents, type RuntimeAgent } from './openclaw-runtime'
 
 interface OpenClawAgent {
   id: string
@@ -53,6 +55,7 @@ export interface SyncResult {
     action: 'created' | 'updated' | 'unchanged'
   }>
   error?: string
+  configPath?: string
 }
 
 export interface SyncDiff {
@@ -178,6 +181,9 @@ export function enrichAgentConfigFromWorkspace(configData: any): any {
   }
 }
 
+/** Default workspace_id for synced agents (openclaw.json is single-tenant) */
+const DEFAULT_WORKSPACE_ID = 1
+
 /** Read and parse openclaw.json agents list */
 async function readOpenClawAgents(): Promise<OpenClawAgent[]> {
   const configPath = getConfigPath()
@@ -186,7 +192,23 @@ async function readOpenClawAgents(): Promise<OpenClawAgent[]> {
   const { readFile } = require('fs/promises')
   const raw = await readFile(configPath, 'utf-8')
   const parsed = parseJsonRelaxed<any>(raw)
-  return parsed?.agents?.list || []
+  let list = parsed?.agents?.list
+  if (!Array.isArray(list)) {
+    // Fallback: agents as object { id: config } (alternate OpenClaw format)
+    const agentsObj = parsed?.agents
+    if (agentsObj && typeof agentsObj === 'object') {
+      list = Object.entries(agentsObj)
+        .filter(([k, v]) => k !== 'list' && k !== 'defaults' && v && typeof v === 'object')
+        .map(([id, v]) => ({ id, ...(v as object) } as OpenClawAgent))
+    } else {
+      list = []
+    }
+  }
+  logger.info(
+    { configPath, agentCount: list.length, agentIds: list.map((a: OpenClawAgent) => a.id) },
+    'Agent sync: read openclaw.json'
+  )
+  return list
 }
 
 /** Extract MC-friendly fields from an OpenClaw agent config */
@@ -218,39 +240,103 @@ function mapAgentToMC(agent: OpenClawAgent): {
   return { name, role, config: configData, soul_content }
 }
 
-/** Sync agents from openclaw.json into the MC database */
+/** Convert RuntimeAgent to OpenClawAgent-like shape for mapAgentToMC */
+function runtimeAgentToOpenClaw(ra: RuntimeAgent): OpenClawAgent {
+  const workspace = config.openclawStateDir
+    ? `workspaces/${ra.id}`
+    : undefined
+  return {
+    id: ra.id,
+    name: ra.name,
+    identity: { name: ra.name },
+    workspace,
+  }
+}
+
+/** Sync agents from runtime (gateway/fs) or openclaw.json fallback into the MC database */
 export async function syncAgentsFromConfig(actor: string = 'system'): Promise<SyncResult> {
+  const configPath = getConfigPath()
+  const DISCOVERY_LOG = '[AgentDiscovery]'
+
+  // 1. Try runtime discovery first
+  const runtime = await discoverRuntimeAgents()
+  if (runtime.agents.length > 0) {
+    logger.info(
+      { count: runtime.agents.length, names: runtime.agents.map((a) => a.name), source: runtime.source },
+      `${DISCOVERY_LOG} runtime agents detected: ${runtime.agents.length}`
+    )
+    logger.info(
+      { names: runtime.agents.map((a) => a.name) },
+      `${DISCOVERY_LOG} runtime agent names: [${runtime.agents.map((a) => a.name).join(', ')}]`
+    )
+    const agents = runtime.agents.map(runtimeAgentToOpenClaw)
+    const result = await syncAgentsToDb(agents, actor)
+    const db = getDatabase()
+    const afterCount = db
+      .prepare('SELECT COUNT(*) as c FROM agents WHERE workspace_id = ?')
+      .get(DEFAULT_WORKSPACE_ID) as { c: number }
+    logger.info(
+      { count: afterCount.c },
+      `${DISCOVERY_LOG} database agents after sync: ${afterCount.c}`
+    )
+    return result
+  }
+
+  // 2. Fallback to openclaw.json
+  logger.info(`${DISCOVERY_LOG} config fallback used`)
   let agents: OpenClawAgent[]
   try {
     agents = await readOpenClawAgents()
   } catch (err: any) {
-    return { synced: 0, created: 0, updated: 0, agents: [], error: err.message }
+    return {
+      synced: 0,
+      created: 0,
+      updated: 0,
+      agents: [],
+      error: err.message,
+      configPath: configPath ?? undefined,
+    }
   }
 
   if (agents.length === 0) {
-    return { synced: 0, created: 0, updated: 0, agents: [] }
+    return {
+      synced: 0,
+      created: 0,
+      updated: 0,
+      agents: [],
+      configPath: configPath ?? undefined,
+    }
   }
 
+  return syncAgentsToDb(agents, actor)
+}
+
+/** Upsert agents into MC database (shared by runtime and config sync) */
+function syncAgentsToDb(agents: OpenClawAgent[], actor: string): SyncResult {
+  const configPath = getConfigPath()
   const db = getDatabase()
   const now = Math.floor(Date.now() / 1000)
+  const workspaceId = DEFAULT_WORKSPACE_ID
   let created = 0
   let updated = 0
   const results: SyncResult['agents'] = []
 
-  const findByName = db.prepare('SELECT id, name, role, config, soul_content FROM agents WHERE name = ?')
+  const findByName = db.prepare(
+    'SELECT id, name, role, config, soul_content FROM agents WHERE name = ? AND workspace_id = ?'
+  )
   const insertAgent = db.prepare(`
-    INSERT INTO agents (name, role, soul_content, status, created_at, updated_at, config)
-    VALUES (?, ?, ?, 'offline', ?, ?, ?)
+    INSERT INTO agents (name, role, soul_content, status, created_at, updated_at, config, workspace_id)
+    VALUES (?, ?, ?, 'offline', ?, ?, ?, ?)
   `)
   const updateAgent = db.prepare(`
-    UPDATE agents SET role = ?, config = ?, soul_content = ?, updated_at = ? WHERE name = ?
+    UPDATE agents SET role = ?, config = ?, soul_content = ?, updated_at = ? WHERE name = ? AND workspace_id = ?
   `)
 
   db.transaction(() => {
     for (const agent of agents) {
       const mapped = mapAgentToMC(agent)
       const configJson = JSON.stringify(mapped.config)
-      const existing = findByName.get(mapped.name) as any
+      const existing = findByName.get(mapped.name, workspaceId) as any
 
       if (existing) {
         // Check if config or soul_content actually changed
@@ -262,14 +348,14 @@ export async function syncAgentsFromConfig(actor: string = 'system'): Promise<Sy
         if (configChanged || soulChanged) {
           // Only overwrite soul_content if we read a new value from workspace
           const soulToWrite = mapped.soul_content ?? existingSoul
-          updateAgent.run(mapped.role, configJson, soulToWrite, now, mapped.name)
+          updateAgent.run(mapped.role, configJson, soulToWrite, now, mapped.name, workspaceId)
           results.push({ id: agent.id, name: mapped.name, action: 'updated' })
           updated++
         } else {
           results.push({ id: agent.id, name: mapped.name, action: 'unchanged' })
         }
       } else {
-        insertAgent.run(mapped.name, mapped.role, mapped.soul_content, now, now, configJson)
+        insertAgent.run(mapped.name, mapped.role, mapped.soul_content, now, now, configJson, workspaceId)
         results.push({ id: agent.id, name: mapped.name, action: 'created' })
         created++
       }
@@ -290,8 +376,61 @@ export async function syncAgentsFromConfig(actor: string = 'system'): Promise<Sy
     eventBus.broadcast('agent.created', { type: 'sync', synced, created, updated })
   }
 
-  logger.info({ synced, created, updated }, 'Agent sync complete')
-  return { synced, created, updated, agents: results }
+  logger.info({ synced, created, updated, configPath }, 'Agent sync complete')
+  return { synced, created, updated, agents: results, configPath: configPath ?? undefined }
+}
+
+/** Return agent discovery diagnostics for troubleshooting */
+export async function getAgentDiscoveryDiagnostics(): Promise<{
+  configPath: string | null
+  configExists: boolean
+  runtimeAgentsDetected: number
+  runtimeAgentNames: string[]
+  configAgentsDetected: number
+  configAgentIds: string[]
+  databaseAgentsDetected: number
+  mcAgentNames: string[]
+  gatewayConnectionStatus: 'reachable' | 'unreachable'
+  workspaceId: number
+}> {
+  const configPath = getConfigPath()
+  const { existsSync } = require('fs')
+  const configExists = configPath ? existsSync(configPath) : false
+
+  const runtime = await discoverRuntimeAgents()
+  const runtimeAgentsDetected = runtime.agents.length
+  const runtimeAgentNames = runtime.agents.map((a) => a.name)
+  const gatewayConnectionStatus = runtime.gatewayReachable ? 'reachable' : 'unreachable'
+
+  let configAgentsDetected = 0
+  let configAgentIds: string[] = []
+  try {
+    const agents = await readOpenClawAgents()
+    configAgentsDetected = agents.length
+    configAgentIds = agents.map((a: OpenClawAgent) => a.id)
+  } catch {
+    // readOpenClawAgents logs internally
+  }
+
+  const db = getDatabase()
+  const mcAgents = db
+    .prepare('SELECT name, workspace_id FROM agents WHERE workspace_id = ?')
+    .all(DEFAULT_WORKSPACE_ID) as Array<{ name: string; workspace_id: number }>
+  const mcAgentNames = mcAgents.map((a) => a.name)
+  const databaseAgentsDetected = mcAgentNames.length
+
+  return {
+    configPath,
+    configExists,
+    runtimeAgentsDetected,
+    runtimeAgentNames,
+    configAgentsDetected,
+    configAgentIds,
+    databaseAgentsDetected,
+    mcAgentNames,
+    gatewayConnectionStatus,
+    workspaceId: DEFAULT_WORKSPACE_ID,
+  }
 }
 
 /** Preview the diff between openclaw.json and MC database without writing */

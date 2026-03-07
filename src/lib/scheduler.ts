@@ -216,7 +216,7 @@ const TICK_MS = 60 * 1000 // Check every minute
 export function initScheduler() {
   if (tickInterval) return // Already running
 
-  // Auto-sync agents from openclaw.json on startup
+  // Auto-sync agents from runtime (gateway/fs) or openclaw.json on startup
   syncAgentsFromConfig('startup').catch(err => {
     logger.warn({ err }, 'Agent auto-sync failed')
   })
