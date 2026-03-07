@@ -53,7 +53,7 @@ export function MultiGatewayPanel() {
   const [showAdd, setShowAdd] = useState(false)
   const [probing, setProbing] = useState<number | null>(null)
   const [healthByGatewayId, setHealthByGatewayId] = useState<Map<number, GatewayHealthProbe>>(new Map())
-  const { connection } = useMissionControl()
+  const { connection, addNotification } = useMissionControl()
   const { connect } = useWebSocket()
 
   const fetchGateways = useCallback(async () => {
@@ -95,23 +95,34 @@ export function MultiGatewayPanel() {
 
   const connectTo = async (gw: Gateway) => {
     try {
-      const res = await fetch('/api/gateways/connect', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: gw.id }),
-      })
-      if (!res.ok) return
-      const payload = await res.json()
-
-      const wsUrl = String(payload?.ws_url || buildGatewayWebSocketUrl({
-        host: gw.host,
-        port: gw.port,
+      const res = await fetch(`/api/gateways/${gw.id}/connection`)
+      const data = await res.json()
+      if (!res.ok) {
+        addNotification({
+          id: Date.now(),
+          recipient: 'operator',
+          type: 'error',
+          title: 'Connection failed',
+          message: data.error || 'Failed to get gateway connection params',
+          created_at: Math.floor(Date.now() / 1000),
+        })
+        return
+      }
+      const wsUrl = buildGatewayWebSocketUrl({
+        host: data.host || gw.host,
+        port: data.port ?? gw.port,
         browserProtocol: window.location.protocol,
-      }))
-      const token = String(payload?.token || '')
-      connect(wsUrl, token)
+      })
+      connect(wsUrl, data.token ?? '')
     } catch {
-      // ignore: connection status will remain disconnected
+      addNotification?.({
+        id: Date.now(),
+        recipient: 'operator',
+        type: 'error',
+        title: 'Connection failed',
+        message: 'Failed to fetch gateway connection params',
+        created_at: Math.floor(Date.now() / 1000),
+      })
     }
   }
 

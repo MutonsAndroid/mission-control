@@ -5,6 +5,8 @@ import { requireRole } from '@/lib/auth'
 import { validateBody, createMessageSchema } from '@/lib/validation'
 import { mutationLimiter } from '@/lib/rate-limit'
 import { logger } from '@/lib/logger'
+import { getBootPaths } from '@/lib/mission-control-boot'
+import { runRecall } from '@/lib/memory'
 
 export async function POST(request: NextRequest) {
   const auth = requireRole(request, 'operator')
@@ -32,6 +34,11 @@ export async function POST(request: NextRequest) {
         { error: 'Recipient agent has no session key configured' },
         { status: 400 }
       )
+    }
+
+    const paths = getBootPaths()
+    if (paths) {
+      runRecall(paths, `Message from ${from} to ${to}: ${message}`)
     }
 
     await runOpenClaw(

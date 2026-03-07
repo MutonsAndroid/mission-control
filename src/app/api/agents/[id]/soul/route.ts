@@ -6,6 +6,7 @@ import { config } from '@/lib/config';
 import { resolveWithin } from '@/lib/paths';
 import { requireRole } from '@/lib/auth';
 import { logger } from '@/lib/logger';
+import { getCanonicalSoul, getBootPaths } from '@/lib/mission-control-boot';
 
 function resolveAgentWorkspacePath(workspace: string): string {
   if (isAbsolute(workspace)) return resolve(workspace)
@@ -63,6 +64,21 @@ export async function GET(
     if (!soulContent && agent.soul_content) {
       soulContent = agent.soul_content
       source = 'database'
+    }
+
+    // Sampson: use canonical SOUL.md from OpenClaw workspace when boot has loaded it
+    if (!soulContent && agent.name === 'Sampson') {
+      const canonical = getCanonicalSoul()
+      if (canonical) {
+        soulContent = canonical
+        source = 'workspace'
+      } else {
+        const paths = getBootPaths()
+        if (paths && existsSync(paths.soul)) {
+          soulContent = readFileSync(paths.soul, 'utf-8')
+          source = 'workspace'
+        }
+      }
     }
 
     const templatesPath = config.soulTemplatesDir;
