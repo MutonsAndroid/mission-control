@@ -50,6 +50,8 @@ export function HeaderBar() {
     workspaces: 'Workspaces',
     'gateway-config': 'Gateway Config',
     settings: 'Settings',
+    tools: 'Tools',
+    skills: 'Skills',
   }
 
   // Search state

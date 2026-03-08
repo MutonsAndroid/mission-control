@@ -28,6 +28,9 @@ const navGroups: NavGroup[] = [
       { id: 'agents', label: 'Agents', icon: <AgentsIcon />, priority: true, requiresGateway: true },
       { id: 'brain', label: 'Brain', icon: <MemoryIcon />, priority: true },
       { id: 'logs', label: 'Logs', icon: <LogsIcon />, priority: false },
+      { id: 'skills', label: 'Skills', icon: <SkillsIcon />, priority: false },
+      { id: 'tools', label: 'Tools', icon: <ToolsIcon />, priority: false },
+      { id: 'settings', label: 'Settings', icon: <SettingsIcon />, priority: false },
     ],
   },
 ]
@@ -587,6 +590,23 @@ function GitHubIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M6 12.5c-3 1-3-1.5-4-2m8 4v-2.2a2.1 2.1 0 00-.6-1.6c2-.2 4.1-1 4.1-4.5a3.5 3.5 0 00-1-2.4 3.2 3.2 0 00-.1-2.4s-.8-.2-2.5 1a8.7 8.7 0 00-4.6 0C3.7 3.4 2.9 3.6 2.9 3.6a3.2 3.2 0 00-.1 2.4 3.5 3.5 0 00-1 2.4c0 3.5 2.1 4.3 4.1 4.5a2.1 2.1 0 00-.6 1.6v2.2" />
+    </svg>
+  )
+}
+
+function SkillsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 1.5l1.4 2.8 3.1.5-2.2 2.2.5 3.1L8 8.8 5.2 10l.5-3.1L3.5 4.8l3.1-.5L8 1.5z" />
+    </svg>
+  )
+}
+
+function ToolsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M11 3l-6 6 2 2 6-6-2-2z" />
+      <path d="M7 9L2 14" />
     </svg>
   )
 }

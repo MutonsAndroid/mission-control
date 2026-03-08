@@ -20,11 +20,12 @@ import { OrchestrationBar } from '@/components/panels/orchestration-bar'
 import { NotificationsPanel } from '@/components/panels/notifications-panel'
 import { UserManagementPanel } from '@/components/panels/user-management-panel'
 import { SettingsPanel } from '@/components/panels/settings-panel'
+import { ToolsPanel } from '@/components/panels/tools-panel'
+import { SkillsPanel } from '@/components/panels/skills-panel'
 import { ChatPanel } from '@/components/chat/chat-panel'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LocalModeBanner } from '@/components/layout/local-mode-banner'
 import { UpdateBanner } from '@/components/layout/update-banner'
-import { PromoBanner } from '@/components/layout/promo-banner'
 import { useWebSocket } from '@/lib/websocket'
 import { useServerEvents } from '@/lib/use-server-events'
 import { useMissionControl } from '@/store'
@@ -146,7 +147,6 @@ export default function Home() {
         <HeaderBar />
         <LocalModeBanner />
         <UpdateBanner />
-        <PromoBanner />
         <main id="main-content" className="flex-1 overflow-auto pb-16 md:pb-0" role="main">
           <div aria-live="polite">
             <ErrorBoundary key={activeTab}>
@@ -236,6 +236,10 @@ function ContentRouter({ tab }: { tab: string }) {
       return <LogViewerPanel />
     case 'brain':
       return <BrainPanel />
+    case 'tools':
+      return <ToolsPanel />
+    case 'skills':
+      return <SkillsPanel />
     case 'users':
       return <UserManagementPanel />
     case 'settings':
