@@ -463,7 +463,12 @@ export function AgentSquadPanelPhase3() {
         <AgentDetailModalPhase3
           agent={selectedAgent}
           onClose={() => setSelectedAgent(null)}
-          onUpdate={fetchAgents}
+          onUpdate={(updatedAgent) => {
+            fetchAgents()
+            if (updatedAgent && updatedAgent.id === selectedAgent.id) {
+              setSelectedAgent(updatedAgent)
+            }
+          }}
           onStatusUpdate={updateAgentStatus}
           onWakeAgent={wakeAgent}
         />
@@ -502,7 +507,7 @@ function AgentDetailModalPhase3({
 }: {
   agent: Agent
   onClose: () => void
-  onUpdate: () => void
+  onUpdate: (updatedAgent?: any) => void
   onStatusUpdate: (name: string, status: Agent['status'], activity?: string) => Promise<void>
   onWakeAgent: (name: string, sessionKey: string) => Promise<void>
 }) {
@@ -517,6 +522,7 @@ function AgentDetailModalPhase3({
   const [soulTemplates, setSoulTemplates] = useState<SoulTemplate[]>([])
   const [heartbeatData, setHeartbeatData] = useState<HeartbeatResponse | null>(null)
   const [loadingHeartbeat, setLoadingHeartbeat] = useState(false)
+  const [tabError, setTabError] = useState<string | null>(null)
 
   const formatLastSeen = (timestamp?: number) => {
     if (!timestamp) return 'Never'
@@ -567,6 +573,7 @@ function AgentDetailModalPhase3({
   }
 
   const handleSave = async () => {
+    setTabError(null)
     try {
       const response = await fetch('/api/agents', {
         method: 'PUT',
@@ -577,16 +584,21 @@ function AgentDetailModalPhase3({
         })
       })
 
-      if (!response.ok) throw new Error('Failed to update agent')
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to update agent')
+      }
       
       setEditing(false)
       onUpdate()
     } catch (error) {
       log.error('Failed to update agent:', error)
+      setTabError(error instanceof Error ? error.message : 'Failed to update agent')
     }
   }
 
   const handleSoulSave = async (content: string, templateName?: string) => {
+    setTabError(null)
     try {
       const response = await fetch(`/api/agents/${agent.id}/soul`, {
         method: 'PUT',
@@ -597,16 +609,21 @@ function AgentDetailModalPhase3({
         })
       })
 
-      if (!response.ok) throw new Error('Failed to update SOUL')
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to update SOUL')
+      }
       
       setFormData(prev => ({ ...prev, soul_content: content }))
       onUpdate()
     } catch (error) {
       log.error('Failed to update SOUL:', error)
+      setTabError(error instanceof Error ? error.message : 'Failed to update SOUL')
     }
   }
 
   const handleMemorySave = async (content: string, append: boolean = false) => {
+    setTabError(null)
     try {
       const response = await fetch(`/api/agents/${agent.id}/memory`, {
         method: 'PUT',
@@ -617,13 +634,17 @@ function AgentDetailModalPhase3({
         })
       })
 
-      if (!response.ok) throw new Error('Failed to update memory')
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}))
+        throw new Error(data.error || 'Failed to update memory')
+      }
       
       const data = await response.json()
       setFormData(prev => ({ ...prev, working_memory: data.working_memory }))
       onUpdate()
     } catch (error) {
       log.error('Failed to update memory:', error)
+      setTabError(error instanceof Error ? error.message : 'Failed to update memory')
     }
   }
 
@@ -671,6 +692,7 @@ function AgentDetailModalPhase3({
             </div>
             <div className="flex items-center gap-3">
               <button
+                type="button"
                 onClick={onClose}
                 aria-label="Close agent details"
                 className="h-9 w-9 inline-flex items-center justify-center rounded-md bg-secondary text-muted-foreground hover:bg-surface-2 hover:text-foreground transition-smooth"
@@ -685,7 +707,8 @@ function AgentDetailModalPhase3({
             {tabs.map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                type="button"
+                onClick={() => { setActiveTab(tab.id as any); setTabError(null) }}
                 className={`px-3.5 py-2 text-sm rounded-md border flex items-center gap-2 transition-smooth whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'bg-primary/90 text-primary-foreground border-primary/60 shadow-[0_0_0_1px_rgba(56,189,248,0.25)]'
@@ -701,6 +724,11 @@ function AgentDetailModalPhase3({
 
         {/* Tab Content */}
         <div className="flex-1 overflow-y-auto">
+          {tabError && (
+            <div className="mx-6 mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+              {tabError}
+            </div>
+          )}
           {activeTab === 'overview' && (
             <OverviewTab
               agent={agent}
@@ -740,7 +768,9 @@ function AgentDetailModalPhase3({
           )}
           
           {activeTab === 'config' && (
-            <ConfigTab agent={agent} onSave={onUpdate} />
+            <ConfigTab agent={agent} onSave={(updatedAgent) => {
+              onUpdate(updatedAgent)
+            }} />
           )}
 
           {activeTab === 'activity' && (

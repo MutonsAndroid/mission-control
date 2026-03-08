@@ -123,6 +123,7 @@ export function OverviewTab({
           {(['idle', 'busy', 'offline'] as const).map(status => (
             <button
               key={status}
+              type="button"
               onClick={() => onStatusUpdate(agent.name, status)}
               className={`px-3 py-1 text-sm rounded transition-smooth ${
                 agent.status === status
@@ -138,6 +139,7 @@ export function OverviewTab({
         {/* Wake Agent Button */}
         {agent.session_key && (
           <button
+            type="button"
             onClick={() => onWakeAgent(agent.name, agent.session_key!)}
             className="w-full bg-cyan-500/20 text-cyan-400 border border-cyan-500/30 py-2 rounded-md hover:bg-cyan-500/30 transition-smooth"
           >
@@ -178,6 +180,7 @@ export function OverviewTab({
         <div className="flex justify-between items-center mb-3">
           <h4 className="text-sm font-medium text-foreground">Heartbeat Check</h4>
           <button
+            type="button"
             onClick={onPerformHeartbeat}
             disabled={loadingHeartbeat}
             className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-smooth"
@@ -305,12 +308,14 @@ export function OverviewTab({
         {editing ? (
           <>
             <button
+              type="button"
               onClick={onSave}
               className="flex-1 bg-primary text-primary-foreground py-2 rounded-md hover:bg-primary/90 transition-smooth"
             >
               Save Changes
             </button>
             <button
+              type="button"
               onClick={onCancel}
               className="flex-1 bg-secondary text-muted-foreground py-2 rounded-md hover:bg-surface-2 transition-smooth"
             >
@@ -319,6 +324,7 @@ export function OverviewTab({
           </>
         ) : (
           <button
+            type="button"
             onClick={onEdit}
             className="flex-1 bg-primary text-primary-foreground py-2 rounded-md hover:bg-primary/90 transition-smooth"
           >
@@ -377,6 +383,7 @@ export function SoulTab({
         <div className="flex gap-2">
           {!editing && (
             <button
+              type="button"
               onClick={() => setEditing(true)}
               className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-smooth"
             >
@@ -404,6 +411,7 @@ export function SoulTab({
               ))}
             </select>
             <button
+              type="button"
               onClick={() => selectedTemplate && handleLoadTemplate(selectedTemplate)}
               disabled={!selectedTemplate}
               className="px-4 py-2 bg-green-500/20 text-green-400 border border-green-500/30 rounded-md hover:bg-green-500/30 disabled:opacity-50 transition-smooth"
@@ -442,12 +450,14 @@ export function SoulTab({
       {editing && (
         <div className="flex gap-3">
           <button
+            type="button"
             onClick={handleSave}
             className="flex-1 bg-primary text-primary-foreground py-2 rounded-md hover:bg-primary/90 transition-smooth"
           >
             Save SOUL
           </button>
           <button
+            type="button"
             onClick={() => {
               setEditing(false)
               setContent(soulContent)
@@ -513,6 +523,7 @@ export function MemoryTab({
           {!editing && (
             <>
               <button
+                type="button"
                 onClick={() => {
                   setAppendMode(true)
                   setEditing(true)
@@ -522,6 +533,7 @@ export function MemoryTab({
                 Add Entry
               </button>
               <button
+                type="button"
                 onClick={() => setEditing(true)}
                 className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-smooth"
               >
@@ -582,12 +594,14 @@ export function MemoryTab({
       {editing && (
         <div className="flex gap-3">
           <button
+            type="button"
             onClick={handleSave}
             className="flex-1 bg-primary text-primary-foreground py-2 rounded-md hover:bg-primary/90 transition-smooth"
           >
             {appendMode ? 'Add Entry' : 'Save Memory'}
           </button>
           <button
+            type="button"
             onClick={() => {
               setEditing(false)
               setAppendMode(false)
@@ -600,6 +614,7 @@ export function MemoryTab({
           </button>
           {!appendMode && (
             <button
+              type="button"
               onClick={handleClear}
               className="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-md hover:bg-red-500/30 transition-smooth"
             >
@@ -1256,7 +1271,7 @@ export function ConfigTab({
   onSave
 }: {
   agent: Agent & { config?: any }
-  onSave: () => void
+  onSave: (updatedAgent?: any) => void
 }) {
   const [config, setConfig] = useState<any>(agent.config || {})
   const [editing, setEditing] = useState(false)
@@ -1351,6 +1366,10 @@ export function ConfigTab({
   }
 
   const handleSave = async () => {
+    if (agent.id == null || agent.id === undefined) {
+      setError('Agent ID is missing; cannot save config')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
@@ -1360,20 +1379,23 @@ export function ConfigTab({
           throw new Error('Primary model is required')
         }
       }
+      const gatewayConfig = showJson ? JSON.parse(jsonInput) : config
       const response = await fetch(`/api/agents/${agent.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          gateway_config: showJson ? JSON.parse(jsonInput) : config,
+          gateway_config: gatewayConfig,
           write_to_gateway: true,
         }),
       })
       const data = await response.json()
-      if (!response.ok) throw new Error(data.error || 'Failed to save')
+      if (!response.ok) throw new Error(data.error || data.message || 'Failed to save')
       setEditing(false)
-      onSave()
+      setConfig(data.agent?.config ?? gatewayConfig)
+      setJsonInput(JSON.stringify(data.agent?.config ?? gatewayConfig, null, 2))
+      onSave(data.agent)
     } catch (err: any) {
-      setError(err.message)
+      setError(err?.message ?? 'Failed to save config')
     } finally {
       setSaving(false)
     }
@@ -1404,6 +1426,7 @@ export function ConfigTab({
         <h4 className="text-lg font-medium text-foreground">OpenClaw Config</h4>
         <div className="flex gap-2">
           <button
+            type="button"
             onClick={() => setShowJson(!showJson)}
             className="px-3 py-1 text-xs bg-surface-2 text-muted-foreground rounded-md hover:bg-surface-1 transition-smooth"
           >
@@ -1411,6 +1434,7 @@ export function ConfigTab({
           </button>
           {!editing && (
             <button
+              type="button"
               onClick={() => setEditing(true)}
               className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-smooth"
             >
@@ -1771,6 +1795,7 @@ export function ConfigTab({
       {editing && (
         <div className="flex gap-3 pt-2">
           <button
+            type="button"
             onClick={handleSave}
             disabled={saving}
             className="flex-1 bg-primary text-primary-foreground py-2 rounded-md hover:bg-primary/90 disabled:opacity-50 transition-smooth"
@@ -1778,6 +1803,7 @@ export function ConfigTab({
             {saving ? 'Saving...' : 'Save'}
           </button>
           <button
+            type="button"
             onClick={() => {
               setEditing(false)
               setConfig(agent.config || {})
