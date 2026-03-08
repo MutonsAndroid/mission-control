@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClientLogger } from '@/lib/client-logger'
 import Link from 'next/link'
+import { IdentityEditor } from '@/components/agent/identity-editor'
 
 const log = createClientLogger('AgentDetailTabs')
 
@@ -472,57 +473,15 @@ export function SoulTab({
   )
 }
 
-// Identity Tab - displays IDENTITY.md from filesystem
+// Identity Tab - structured form editor for IDENTITY.md
 export function IdentityTab({ agent }: { agent: Agent }) {
-  const [content, setContent] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [project, setProject] = useState<string | null>(null)
-  const [reportsTo, setReportsTo] = useState<string | null>(null)
-
-  useEffect(() => {
-    const agentId = agent.name.toLowerCase().replace(/\s+/g, '-')
-    fetch(`/api/brain/agents/${encodeURIComponent(agentId)}`)
-      .then((res) => res.ok ? res.json() : null)
-      .then((data) => {
-        if (data) {
-          setContent(data.identity ?? null)
-          setProject(data.project ?? null)
-          setReportsTo(data.reportsTo ?? null)
-        }
-      })
-      .finally(() => setLoading(false))
-  }, [agent.name])
-
-  if (loading) {
-    return (
-      <div className="p-6 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
-      </div>
-    )
-  }
-
+  const agentId = agent.name.toLowerCase().replace(/\s+/g, '-')
   return (
-    <div className="p-6 space-y-4">
-      <h4 className="text-lg font-medium text-foreground">IDENTITY.md</h4>
-      {(project || reportsTo) && (
-        <div className="flex gap-3 text-sm">
-          {project && (
-            <span className="px-2 py-1 rounded bg-primary/20 text-primary">
-              Scope: {project}
-            </span>
-          )}
-          {reportsTo && (
-            <span className="text-muted-foreground">Reports to: {reportsTo}</span>
-          )}
-        </div>
-      )}
-      <div className="bg-surface-1/30 rounded p-4 max-h-96 overflow-y-auto">
-        {content ? (
-          <pre className="text-foreground whitespace-pre-wrap text-sm font-mono">{content}</pre>
-        ) : (
-          <p className="text-muted-foreground italic">No IDENTITY.md found</p>
-        )}
-      </div>
+    <div className="p-6">
+      <IdentityEditor
+        agentId={agentId}
+        agentName={agent.name}
+      />
     </div>
   )
 }

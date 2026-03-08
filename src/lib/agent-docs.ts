@@ -127,6 +127,26 @@ export function loadAgentDocs(
 }
 
 /**
+ * Get the first candidate directory for an agent (used for creating/writing).
+ */
+function getFirstCandidateDir(agentId: string, agentName?: string): string | null {
+  const dirs = getCandidateDirs(agentId, agentName)
+  return dirs[0] ?? null
+}
+
+/**
+ * Get the path where IDENTITY.md should be written.
+ * Prefers the path we read from if identity exists; otherwise uses the first candidate dir.
+ */
+export function getIdentityWritePath(agentId: string, agentName?: string): string | null {
+  const docs = loadAgentDocs(agentId, agentName)
+  if (docs.paths.identity) return docs.paths.identity
+  const firstDir = getFirstCandidateDir(agentId, agentName)
+  if (!firstDir) return null
+  return path.join(firstDir, 'IDENTITY.md')
+}
+
+/**
  * Get list of doc types and paths for diagnostics.
  */
 export function getAgentDocsDiagnostics(agentId: string): {
