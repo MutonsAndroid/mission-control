@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     }
 
     let query = 'SELECT * FROM pipeline_runs WHERE workspace_id = ?'
-    const params: any[] = [workspaceId]
+    const params: (number | string)[] = [workspaceId]
 
     if (pipelineId) {
       query += ' AND pipeline_id = ?'
@@ -98,14 +98,23 @@ export async function POST(request: NextRequest) {
   try {
     const db = getDatabase()
     const workspaceId = auth.user.workspace_id ?? 1
-    const body = await request.json()
+    const body = (await request.json()) as { action?: string; pipeline_id?: number; run_id?: number; success?: boolean; error?: string }
     const { action, pipeline_id, run_id } = body
 
     if (action === 'start') {
+      if (pipeline_id == null || typeof pipeline_id !== 'number' || !Number.isInteger(pipeline_id) || pipeline_id <= 0) {
+        return NextResponse.json({ error: 'Invalid pipeline_id' }, { status: 400 })
+      }
       return startPipeline(db, pipeline_id, auth.user?.username || 'system', workspaceId)
     } else if (action === 'advance') {
+      if (run_id == null || typeof run_id !== 'number' || !Number.isInteger(run_id) || run_id <= 0) {
+        return NextResponse.json({ error: 'Invalid run_id' }, { status: 400 })
+      }
       return advanceRun(db, run_id, body.success ?? true, body.error, workspaceId)
     } else if (action === 'cancel') {
+      if (run_id == null || typeof run_id !== 'number' || !Number.isInteger(run_id) || run_id <= 0) {
+        return NextResponse.json({ error: 'Invalid run_id' }, { status: 400 })
+      }
       return cancelRun(db, run_id, workspaceId)
     }
 
@@ -141,17 +150,23 @@ async function spawnStep(
     db.prepare('UPDATE pipeline_runs SET steps_snapshot = ? WHERE id = ? AND workspace_id = ?').run(JSON.stringify(steps), runId, workspaceId)
 
     return { success: true, stdout: stdout.trim() }
-  } catch (err: any) {
+  } catch (err: unknown) {
     // Spawn failed - record error but keep pipeline running for manual advance
-    steps[stepIdx].error = err.message
+    steps[stepIdx].error = err instanceof Error ? err.message : String(err)
     db.prepare('UPDATE pipeline_runs SET steps_snapshot = ? WHERE id = ? AND workspace_id = ?').run(JSON.stringify(steps), runId, workspaceId)
 
-    return { success: false, error: err.message }
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
   }
 }
 
+interface WorkflowPipelineRow {
+  id: number
+  name: string
+  steps: string
+}
+
 async function startPipeline(db: ReturnType<typeof getDatabase>, pipelineId: number, triggeredBy: string, workspaceId: number) {
-  const pipeline = db.prepare('SELECT * FROM workflow_pipelines WHERE id = ? AND workspace_id = ?').get(pipelineId, workspaceId) as any
+  const pipeline = db.prepare('SELECT * FROM workflow_pipelines WHERE id = ? AND workspace_id = ?').get(pipelineId, workspaceId) as WorkflowPipelineRow | undefined
   if (!pipeline) return NextResponse.json({ error: 'Pipeline not found' }, { status: 404 })
 
   const steps: PipelineStep[] = JSON.parse(pipeline.steps || '[]')
@@ -192,7 +207,7 @@ async function startPipeline(db: ReturnType<typeof getDatabase>, pipelineId: num
 
   // Spawn first step
   const firstTemplate = templateMap.get(steps[0].template_id)
-  let spawnResult: any = null
+  let spawnResult: { success: boolean; stdout?: string; error?: string } | null = null
   if (firstTemplate) {
     spawnResult = await spawnStep(db, pipeline.name, firstTemplate, stepsSnapshot, 0, runId, workspaceId)
   }
@@ -268,12 +283,12 @@ async function advanceRun(db: ReturnType<typeof getDatabase>, runId: number, suc
   steps[nextIdx].started_at = now
 
   const template = db.prepare('SELECT id, name, model, task_prompt, timeout_seconds FROM workflow_templates WHERE id = ?')
-    .get(steps[nextIdx].template_id) as any
+    .get(steps[nextIdx].template_id) as { id: number; name: string; model: string; task_prompt: string; timeout_seconds: number } | undefined
 
-  let spawnResult: any = null
+  let spawnResult: { success: boolean; stdout?: string; error?: string } | null = null
   if (template) {
-    const pipeline = db.prepare('SELECT name FROM workflow_pipelines WHERE id = ? AND workspace_id = ?').get(run.pipeline_id, workspaceId) as any
-    spawnResult = await spawnStep(db, pipeline?.name || '?', template, steps, nextIdx, runId, workspaceId)
+    const pipelineRow = db.prepare('SELECT name FROM workflow_pipelines WHERE id = ? AND workspace_id = ?').get(run.pipeline_id, workspaceId) as { name: string } | undefined
+    spawnResult = await spawnStep(db, pipelineRow?.name || '?', template, steps, nextIdx, runId, workspaceId)
   }
 
   db.prepare('UPDATE pipeline_runs SET current_step = ?, steps_snapshot = ? WHERE id = ? AND workspace_id = ?')

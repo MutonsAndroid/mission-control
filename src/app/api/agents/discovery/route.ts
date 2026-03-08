@@ -42,6 +42,9 @@ export async function GET(request: NextRequest) {
       configAgentsDetected: diagnostics.configAgentsDetected,
       databaseAgentsDetected: diagnostics.databaseAgentsDetected,
       gatewayConnectionStatus: diagnostics.gatewayConnectionStatus,
+      agentDocsDetected: diagnostics.agentDocsDetected,
+      docTypes: diagnostics.docTypes,
+      docPaths: diagnostics.docPaths,
       config: {
         path: diagnostics.configPath,
         exists: diagnostics.configExists,

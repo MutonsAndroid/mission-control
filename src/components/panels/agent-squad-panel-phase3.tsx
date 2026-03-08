@@ -462,7 +462,10 @@ export function AgentSquadPanelPhase3() {
       {selectedAgent && (
         <AgentDetailModalPhase3
           agent={selectedAgent}
-          onClose={() => setSelectedAgent(null)}
+          onClose={() => {
+            setSelectedAgent(null)
+            fetchAgents() // Refresh list so next open has latest config
+          }}
           onUpdate={(updatedAgent) => {
             fetchAgents()
             if (updatedAgent && updatedAgent.id === selectedAgent.id) {
@@ -499,7 +502,7 @@ export function AgentSquadPanelPhase3() {
 
 // Enhanced Agent Detail Modal with Tabs
 function AgentDetailModalPhase3({
-  agent,
+  agent: initialAgent,
   onClose,
   onUpdate,
   onStatusUpdate,
@@ -511,14 +514,55 @@ function AgentDetailModalPhase3({
   onStatusUpdate: (name: string, status: Agent['status'], activity?: string) => Promise<void>
   onWakeAgent: (name: string, sessionKey: string) => Promise<void>
 }) {
+  const [agent, setAgent] = useState(initialAgent)
+  const [loadingAgent, setLoadingAgent] = useState(false)
+
+  // Refetch agent when modal opens to ensure we have the latest config from the server
+  useEffect(() => {
+    let cancelled = false
+    const fetchAgent = async () => {
+      setLoadingAgent(true)
+      try {
+        const res = await fetch(`/api/agents/${initialAgent.id}`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled && data.agent) setAgent(data.agent)
+      } catch {
+        if (!cancelled) setAgent(initialAgent)
+      } finally {
+        if (!cancelled) setLoadingAgent(false)
+      }
+    }
+    fetchAgent()
+    return () => { cancelled = true }
+  }, [initialAgent.id])
+
+  // When parent passes updated agent (e.g. after Config save), use it so we don't overwrite with stale data
+  useEffect(() => {
+    setAgent(prev => (initialAgent.updated_at != null && (prev.updated_at == null || initialAgent.updated_at >= prev.updated_at)) ? initialAgent : prev)
+  }, [initialAgent, initialAgent.updated_at])
+
   const [activeTab, setActiveTab] = useState<'overview' | 'soul' | 'memory' | 'config' | 'tasks' | 'activity'>('overview')
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState({
-    role: agent.role,
-    session_key: agent.session_key || '',
-    soul_content: agent.soul_content || '',
-    working_memory: agent.working_memory || ''
+    role: initialAgent.role,
+    session_key: initialAgent.session_key || '',
+    soul_content: initialAgent.soul_content || '',
+    working_memory: initialAgent.working_memory || ''
   })
+
+  // Sync formData when agent refetch completes
+  useEffect(() => {
+    if (!loadingAgent) {
+      setFormData(prev => ({
+        ...prev,
+        role: agent.role,
+        session_key: agent.session_key || '',
+        soul_content: agent.soul_content ?? prev.soul_content,
+        working_memory: agent.working_memory ?? prev.working_memory
+      }))
+    }
+  }, [loadingAgent, agent.role, agent.session_key, agent.soul_content, agent.working_memory])
   const [soulTemplates, setSoulTemplates] = useState<SoulTemplate[]>([])
   const [heartbeatData, setHeartbeatData] = useState<HeartbeatResponse | null>(null)
   const [loadingHeartbeat, setLoadingHeartbeat] = useState(false)

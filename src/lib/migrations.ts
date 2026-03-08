@@ -830,6 +830,30 @@ const migrations: Migration[] = [
       db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_api_keys_expires_at ON agent_api_keys(expires_at)`)
       db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_api_keys_revoked_at ON agent_api_keys(revoked_at)`)
     }
+  },
+  {
+    id: '028_agent_docs',
+    up: (db) => {
+      const hasAgents = db
+        .prepare(`SELECT 1 as ok FROM sqlite_master WHERE type = 'table' AND name = 'agents'`)
+        .get() as { ok?: number } | undefined
+      if (!hasAgents?.ok) return
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS agent_docs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          agent_id INTEGER NOT NULL,
+          type TEXT NOT NULL,
+          path TEXT NOT NULL,
+          content TEXT NOT NULL,
+          updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+          UNIQUE(agent_id, type),
+          FOREIGN KEY (agent_id) REFERENCES agents(id) ON DELETE CASCADE
+        );
+      `)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_docs_agent_id ON agent_docs(agent_id)`)
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_docs_type ON agent_docs(type)`)
+    }
   }
 ]
 

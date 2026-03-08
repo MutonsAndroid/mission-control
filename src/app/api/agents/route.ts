@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDatabase, Agent, db_helpers } from '@/lib/db';
+import { getAgentDocsFromDb } from '@/lib/agent-sync';
 import { eventBus } from '@/lib/event-bus';
 import { getTemplate, buildAgentConfig } from '@/lib/agent-templates';
 import { writeAgentToConfig, enrichAgentConfigFromWorkspace } from '@/lib/agent-sync';
@@ -69,11 +70,17 @@ export async function GET(request: NextRequest) {
       WHERE assigned_to = ? AND workspace_id = ?
     `);
 
+    // Load agent docs for all agents (hydrated from filesystem during sync)
+    const agentIds = agentsWithParsedData.map(a => a.id);
+    const docsMap = getAgentDocsFromDb(agentIds);
+
     const agentsWithStats = agentsWithParsedData.map(agent => {
       const taskStats = taskCountStmt.get(agent.name, workspaceId) as any;
+      const docs = docsMap[agent.id] || {};
 
       return {
         ...agent,
+        docs: Object.keys(docs).length > 0 ? docs : undefined,
         taskStats: {
           total: taskStats.total || 0,
           assigned: taskStats.assigned || 0,

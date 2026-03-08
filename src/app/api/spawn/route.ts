@@ -55,8 +55,9 @@ export async function POST(request: NextRequest) {
         const result = await runSpawnWithCompatibility(spawnPayload)
         stdout = result.stdout
         stderr = result.stderr
-      } catch (firstError: any) {
-        const rawErr = String(firstError?.stderr || firstError?.message || '').toLowerCase()
+      } catch (firstError: unknown) {
+        const err = firstError as { stderr?: string; message?: string }
+        const rawErr = String(err?.stderr || err?.message || '').toLowerCase()
         const likelySchemaMismatch =
           rawErr.includes('unknown field') ||
           rawErr.includes('unknown key') ||
@@ -66,7 +67,7 @@ export async function POST(request: NextRequest) {
         if (!likelySchemaMismatch) throw firstError
 
         const fallbackPayload = { ...spawnPayload }
-        delete (fallbackPayload as any).tools
+        delete (fallbackPayload as Record<string, unknown>).tools
         const fallback = await runSpawnWithCompatibility(fallbackPayload)
         stdout = fallback.stdout
         stderr = fallback.stderr
@@ -102,13 +103,13 @@ export async function POST(request: NextRequest) {
         },
       })
 
-    } catch (execError: any) {
+    } catch (execError: unknown) {
       logger.error({ err: execError }, 'Spawn execution error')
-      
+      const message = execError instanceof Error ? execError.message : 'Failed to spawn agent'
       return NextResponse.json({
         success: false,
         spawnId,
-        error: execError.message || 'Failed to spawn agent',
+        error: message,
         task,
         model,
         label,

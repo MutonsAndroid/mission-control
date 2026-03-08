@@ -15,6 +15,7 @@ import { resolveWithin } from './paths'
 import { logger } from './logger'
 import { parseJsonRelaxed } from './json-relaxed'
 import { discoverRuntimeAgents, type RuntimeAgent } from './openclaw-runtime'
+import { loadAgentDocs, getAgentDocsDiagnostics } from './agent-docs'
 
 interface OpenClawAgent {
   id: string
@@ -331,6 +332,11 @@ function syncAgentsToDb(agents: OpenClawAgent[], actor: string): SyncResult {
   const updateAgent = db.prepare(`
     UPDATE agents SET role = ?, config = ?, soul_content = ?, updated_at = ? WHERE name = ? AND workspace_id = ?
   `)
+  const upsertAgentDoc = db.prepare(`
+    INSERT INTO agent_docs (agent_id, type, path, content, updated_at)
+    VALUES (?, ?, ?, ?, ?)
+    ON CONFLICT(agent_id, type) DO UPDATE SET path = excluded.path, content = excluded.content, updated_at = excluded.updated_at
+  `)
 
   db.transaction(() => {
     for (const agent of agents) {
@@ -338,7 +344,9 @@ function syncAgentsToDb(agents: OpenClawAgent[], actor: string): SyncResult {
       const configJson = JSON.stringify(mapped.config)
       const existing = findByName.get(mapped.name, workspaceId) as any
 
+      let mcAgentId: number
       if (existing) {
+        mcAgentId = existing.id
         // Check if config or soul_content actually changed
         const existingConfig = existing.config || '{}'
         const existingSoul = existing.soul_content || null
@@ -355,9 +363,20 @@ function syncAgentsToDb(agents: OpenClawAgent[], actor: string): SyncResult {
           results.push({ id: agent.id, name: mapped.name, action: 'unchanged' })
         }
       } else {
-        insertAgent.run(mapped.name, mapped.role, mapped.soul_content, now, now, configJson, workspaceId)
+        const insertResult = insertAgent.run(mapped.name, mapped.role, mapped.soul_content, now, now, configJson, workspaceId)
+        mcAgentId = insertResult.lastInsertRowid as number
         results.push({ id: agent.id, name: mapped.name, action: 'created' })
         created++
+      }
+
+      // Hydrate agent docs from filesystem (OpenClaw source of truth)
+      const docs = loadAgentDocs(agent.id, mapped.name)
+      for (const [docType, content] of Object.entries(docs)) {
+        if (docType === 'paths' || typeof content !== 'string') continue
+        const docPath = docs.paths[docType]
+        if (docPath) {
+          upsertAgentDoc.run(mcAgentId, docType, docPath, content, now)
+        }
       }
     }
   })()
@@ -380,6 +399,26 @@ function syncAgentsToDb(agents: OpenClawAgent[], actor: string): SyncResult {
   return { synced, created, updated, agents: results, configPath: configPath ?? undefined }
 }
 
+/** Load agent docs from DB for given agent IDs. Returns map: agentId -> { soul, identity, constitution, charter, memory } */
+export function getAgentDocsFromDb(agentIds: number[]): Record<number, Record<string, string>> {
+  if (agentIds.length === 0) return {}
+  const db = getDatabase()
+  const hasAgentDocs = db.prepare(`SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'agent_docs'`).get()
+  if (!hasAgentDocs) return {}
+
+  const placeholders = agentIds.map(() => '?').join(',')
+  const rows = db
+    .prepare(`SELECT agent_id, type, content FROM agent_docs WHERE agent_id IN (${placeholders})`)
+    .all(...agentIds) as Array<{ agent_id: number; type: string; content: string }>
+
+  const map: Record<number, Record<string, string>> = {}
+  for (const row of rows) {
+    if (!map[row.agent_id]) map[row.agent_id] = {}
+    map[row.agent_id][row.type] = row.content
+  }
+  return map
+}
+
 /** Return agent discovery diagnostics for troubleshooting */
 export async function getAgentDiscoveryDiagnostics(): Promise<{
   configPath: string | null
@@ -392,6 +431,9 @@ export async function getAgentDiscoveryDiagnostics(): Promise<{
   mcAgentNames: string[]
   gatewayConnectionStatus: 'reachable' | 'unreachable'
   workspaceId: number
+  agentDocsDetected: boolean
+  docTypes: string[]
+  docPaths: string[]
 }> {
   const configPath = getConfigPath()
   const { existsSync } = require('fs')
@@ -419,6 +461,10 @@ export async function getAgentDiscoveryDiagnostics(): Promise<{
   const mcAgentNames = mcAgents.map((a) => a.name)
   const databaseAgentsDetected = mcAgentNames.length
 
+  // Agent docs discovery: check first runtime/config agent
+  const sampleAgentId = runtime.agents[0]?.id ?? configAgentIds[0]
+  const docsDiag = sampleAgentId ? getAgentDocsDiagnostics(sampleAgentId) : { agentDocsDetected: false, docTypes: [], docPaths: [] }
+
   return {
     configPath,
     configExists,
@@ -430,6 +476,9 @@ export async function getAgentDiscoveryDiagnostics(): Promise<{
     mcAgentNames,
     gatewayConnectionStatus,
     workspaceId: DEFAULT_WORKSPACE_ID,
+    agentDocsDetected: docsDiag.agentDocsDetected,
+    docTypes: docsDiag.docTypes,
+    docPaths: docsDiag.docPaths,
   }
 }
 
