@@ -8,6 +8,7 @@ import { useNavigateToPanel } from '@/lib/navigation'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { DigitalClock } from '@/components/ui/digital-clock'
 import { APP_VERSION } from '@/lib/version'
+import { UserProfileEditor } from '@/components/panels/user-profile-editor'
 
 interface SearchResult {
   type: string
@@ -216,7 +217,11 @@ export function HeaderBar() {
 
         {/* User menu */}
         {currentUser && (
-          <UserMenu user={currentUser} onLogout={() => setCurrentUser(null)} />
+          <UserMenu
+            user={currentUser}
+            onLogout={() => setCurrentUser(null)}
+            navigateToPanel={navigateToPanel}
+          />
         )}
       </div>
 
@@ -405,9 +410,18 @@ function ChatIcon() {
   )
 }
 
-function UserMenu({ user, onLogout }: { user: { username: string; display_name: string; role: string }; onLogout: () => void }) {
+function UserMenu({
+  user,
+  onLogout,
+  navigateToPanel
+}: {
+  user: { username: string; display_name: string; role: string }
+  onLogout: () => void
+  navigateToPanel: (tab: string) => void
+}) {
   const [open, setOpen] = useState(false)
   const [showPasswordDialog, setShowPasswordDialog] = useState(false)
+  const [showProfileEditor, setShowProfileEditor] = useState(false)
   const router = useRouter()
 
   const initials = user.display_name
@@ -442,6 +456,18 @@ function UserMenu({ user, onLogout }: { user: { username: string; display_name: 
               <p className="text-xs text-muted-foreground">{user.role}</p>
             </div>
             <button
+              onClick={() => { setOpen(false); setShowProfileEditor(true) }}
+              className="w-full px-3 py-2 text-sm text-left text-muted-foreground hover:text-foreground hover:bg-secondary transition-smooth"
+            >
+              Profile
+            </button>
+            <button
+              onClick={() => { setOpen(false); navigateToPanel('settings') }}
+              className="w-full px-3 py-2 text-sm text-left text-muted-foreground hover:text-foreground hover:bg-secondary transition-smooth"
+            >
+              Settings
+            </button>
+            <button
               onClick={() => { setOpen(false); setShowPasswordDialog(true) }}
               className="w-full px-3 py-2 text-sm text-left text-muted-foreground hover:text-foreground hover:bg-secondary transition-smooth"
             >
@@ -459,6 +485,9 @@ function UserMenu({ user, onLogout }: { user: { username: string; display_name: 
 
       {showPasswordDialog && (
         <PasswordDialog onClose={() => setShowPasswordDialog(false)} />
+      )}
+      {showProfileEditor && (
+        <UserProfileEditor onClose={() => setShowProfileEditor(false)} />
       )}
     </div>
   )
