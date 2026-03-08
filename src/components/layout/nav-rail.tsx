@@ -20,51 +20,26 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    id: 'core',
+    id: 'portfolio',
+    label: 'PORTFOLIO',
     items: [
       { id: 'overview', label: 'Overview', icon: <OverviewIcon />, priority: true },
+      { id: 'projects', label: 'Projects', icon: <TasksIcon />, priority: true },
+    ],
+  },
+  {
+    id: 'agents',
+    label: 'AGENTS',
+    items: [
       { id: 'agents', label: 'Agents', icon: <AgentsIcon />, priority: true, requiresGateway: true },
-      { id: 'tasks', label: 'Tasks', icon: <TasksIcon />, priority: true },
-      { id: 'sessions', label: 'Sessions', icon: <SessionsIcon />, priority: false },
-      { id: 'office', label: 'Office', icon: <OfficeIcon />, priority: false },
-      { id: 'documents', label: 'Documents', icon: <DocumentsIcon />, priority: false },
     ],
   },
   {
-    id: 'observe',
-    label: 'OBSERVE',
+    id: 'operate',
+    label: 'OPERATE',
     items: [
-      { id: 'activity', label: 'Activity', icon: <ActivityIcon />, priority: true },
       { id: 'logs', label: 'Logs', icon: <LogsIcon />, priority: false },
-      { id: 'tokens', label: 'Tokens', icon: <TokensIcon />, priority: false },
-      { id: 'agent-costs', label: 'Agent Costs', icon: <AgentCostsIcon />, priority: false },
-      { id: 'memory', label: 'Memory', icon: <MemoryIcon />, priority: false },
-    ],
-  },
-  {
-    id: 'automate',
-    label: 'AUTOMATE',
-    items: [
-      { id: 'cron', label: 'Cron', icon: <CronIcon />, priority: false },
-      { id: 'spawn', label: 'Spawn', icon: <SpawnIcon />, priority: false, requiresGateway: true },
-      { id: 'webhooks', label: 'Webhooks', icon: <WebhookIcon />, priority: false },
-      { id: 'alerts', label: 'Alerts', icon: <AlertIcon />, priority: false },
-      { id: 'github', label: 'GitHub', icon: <GitHubIcon />, priority: false },
-    ],
-  },
-  {
-    id: 'admin',
-    label: 'ADMIN',
-    items: [
-      { id: 'users', label: 'Users', icon: <UsersIcon />, priority: false },
-      { id: 'audit', label: 'Audit', icon: <AuditIcon />, priority: false },
-      { id: 'history', label: 'History', icon: <HistoryIcon />, priority: false },
-      { id: 'gateways', label: 'Gateways', icon: <GatewaysIcon />, priority: false },
-      { id: 'gateway-config', label: 'Config', icon: <GatewayConfigIcon />, priority: false, requiresGateway: true },
-      { id: 'integrations', label: 'Integrations', icon: <IntegrationsIcon />, priority: false },
-      { id: 'workspaces', label: 'Workspaces', icon: <SuperAdminIcon />, priority: false },
-      { id: 'super-admin', label: 'Super Admin', icon: <SuperAdminIcon />, priority: false },
-      { id: 'settings', label: 'Settings', icon: <SettingsIcon />, priority: false },
+      { id: 'brain', label: 'Brain', icon: <MemoryIcon />, priority: true },
     ],
   },
 ]
@@ -105,7 +80,7 @@ export function NavRail() {
             <span className="text-primary-foreground font-bold text-xs">MC</span>
           </div>
           {sidebarExpanded && (
-            <span className="text-sm font-semibold text-foreground truncate flex-1">Mission Control</span>
+            <span className="text-sm font-semibold text-foreground truncate flex-1">Sampson Console</span>
           )}
           <button
             onClick={toggleSidebar}

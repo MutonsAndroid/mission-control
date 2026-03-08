@@ -14,7 +14,6 @@ import type { OpenClawPaths } from './locate'
 import type { IndexChunk } from './semantic-index'
 
 const CHUNKS_FILE = 'chunks.json'
-const EMBEDDINGS_FILE = 'embeddings.jsonl'
 const MAX_SNIPPETS = 15
 const SNIPPET_EXCERPT_LEN = 400
 
@@ -48,33 +47,9 @@ function loadChunksFromJson(indexDir: string): IndexChunk[] | null {
   }
 }
 
-function loadChunksFromEmbeddings(indexDir: string): IndexChunk[] | null {
-  const p = path.join(indexDir, EMBEDDINGS_FILE)
-  if (!fs.existsSync(p)) return null
-  const chunks: IndexChunk[] = []
-  try {
-    const lines = fs.readFileSync(p, 'utf-8').split('\n').filter(Boolean)
-    for (const line of lines) {
-      const obj = JSON.parse(line) as { file: string; heading: string; excerpt: string; terms: string[] }
-      chunks.push({
-        file: obj.file,
-        heading: obj.heading,
-        content: obj.excerpt,
-        excerpt: obj.excerpt.slice(0, SNIPPET_EXCERPT_LEN),
-        terms: obj.terms || [],
-      })
-    }
-    return chunks.length > 0 ? chunks : null
-  } catch {
-    return null
-  }
-}
-
 function loadChunks(indexDir: string): IndexChunk[] {
   const fromJson = loadChunksFromJson(indexDir)
-  if (fromJson && fromJson.length > 0) return fromJson
-  const fromEmbed = loadChunksFromEmbeddings(indexDir)
-  return fromEmbed ?? []
+  return fromJson ?? []
 }
 
 function truncate(s: string, maxLen: number): string {

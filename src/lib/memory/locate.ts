@@ -19,6 +19,9 @@ export interface OpenClawPaths {
   workspace: string
   brain: string
   brainIndex: string
+  brainProjectsDir: string
+  brainSummariesDir: string
+  brainCapabilitiesDir: string
   portfolio: string
   summariesDaily: string
   working: string
@@ -26,6 +29,9 @@ export interface OpenClawPaths {
   runtime: string
   activeRecall: string
   agents: string
+  agentsDir: string
+  hierarchyPath: string
+  logsDir: string
   soul: string
   user: string
 }
@@ -73,11 +79,15 @@ export function locateOpenClawInstall(): OpenClawPaths | null {
 function buildPaths(root: string, workspace: string): OpenClawPaths {
   const brain = path.join(workspace, 'BRAIN')
   const portfolio = path.join(brain, '_portfolio')
+  const agentsDir = path.join(workspace, 'agents')
   return {
     root,
     workspace,
     brain,
     brainIndex: path.join(brain, 'index.md'),
+    brainProjectsDir: path.join(brain, 'projects'),
+    brainSummariesDir: path.join(brain, 'summaries'),
+    brainCapabilitiesDir: path.join(brain, 'capabilities'),
     portfolio,
     summariesDaily: path.join(brain, 'summaries', 'daily'),
     working: path.join(brain, 'working'),
@@ -85,6 +95,9 @@ function buildPaths(root: string, workspace: string): OpenClawPaths {
     runtime: path.join(portfolio, 'runtime'),
     activeRecall: path.join(portfolio, 'runtime', 'active-recall.md'),
     agents: path.join(workspace, 'AGENTS.md'),
+    agentsDir,
+    hierarchyPath: path.join(agentsDir, 'hierarchy.json'),
+    logsDir: path.join(workspace, 'logs'),
     soul: path.join(workspace, 'SOUL.md'),
     user: path.join(workspace, 'USER.md'),
   }

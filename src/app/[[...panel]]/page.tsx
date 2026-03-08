@@ -8,31 +8,15 @@ import { LiveFeed } from '@/components/layout/live-feed'
 import { Dashboard } from '@/components/dashboard/dashboard'
 import { AgentSpawnPanel } from '@/components/panels/agent-spawn-panel'
 import { LogViewerPanel } from '@/components/panels/log-viewer-panel'
-import { CronManagementPanel } from '@/components/panels/cron-management-panel'
-import { MemoryBrowserPanel } from '@/components/panels/memory-browser-panel'
-import { TokenDashboardPanel } from '@/components/panels/token-dashboard-panel'
-import { AgentCostPanel } from '@/components/panels/agent-cost-panel'
-import { SessionDetailsPanel } from '@/components/panels/session-details-panel'
-import { TaskBoardPanel } from '@/components/panels/task-board-panel'
-import { ActivityFeedPanel } from '@/components/panels/activity-feed-panel'
+import { BrainPanel } from '@/components/panels/brain-panel'
+import { ProjectTasksPanel } from '@/components/panels/project-tasks-panel'
 import { AgentSquadPanelPhase3 } from '@/components/panels/agent-squad-panel-phase3'
 import { AgentCommsPanel } from '@/components/panels/agent-comms-panel'
 import { StandupPanel } from '@/components/panels/standup-panel'
 import { OrchestrationBar } from '@/components/panels/orchestration-bar'
 import { NotificationsPanel } from '@/components/panels/notifications-panel'
 import { UserManagementPanel } from '@/components/panels/user-management-panel'
-import { AuditTrailPanel } from '@/components/panels/audit-trail-panel'
-import { AgentHistoryPanel } from '@/components/panels/agent-history-panel'
-import { WebhookPanel } from '@/components/panels/webhook-panel'
 import { SettingsPanel } from '@/components/panels/settings-panel'
-import { GatewayConfigPanel } from '@/components/panels/gateway-config-panel'
-import { IntegrationsPanel } from '@/components/panels/integrations-panel'
-import { AlertRulesPanel } from '@/components/panels/alert-rules-panel'
-import { MultiGatewayPanel } from '@/components/panels/multi-gateway-panel'
-import { SuperAdminPanel } from '@/components/panels/super-admin-panel'
-import { OfficePanel } from '@/components/panels/office-panel'
-import { GitHubSyncPanel } from '@/components/panels/github-sync-panel'
-import { DocumentsPanel } from '@/components/panels/documents-panel'
 import { ChatPanel } from '@/components/chat/chat-panel'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LocalModeBanner } from '@/components/layout/local-mode-banner'
@@ -212,7 +196,9 @@ function ContentRouter({ tab }: { tab: string }) {
         </>
       )
     case 'tasks':
-      return <TaskBoardPanel />
+      return <ProjectTasksPanel />
+    case 'projects':
+      return <ProjectTasksPanel />
     case 'agents':
       return (
         <>
@@ -225,54 +211,20 @@ function ContentRouter({ tab }: { tab: string }) {
           )}
         </>
       )
-    case 'activity':
-      return <ActivityFeedPanel />
     case 'notifications':
       return <NotificationsPanel />
     case 'standup':
       return <StandupPanel />
     case 'spawn':
       return <AgentSpawnPanel />
-    case 'sessions':
-      return <SessionDetailsPanel />
     case 'logs':
       return <LogViewerPanel />
-    case 'cron':
-      return <CronManagementPanel />
-    case 'memory':
-      return <MemoryBrowserPanel />
-    case 'tokens':
-      return <TokenDashboardPanel />
-    case 'agent-costs':
-      return <AgentCostPanel />
+    case 'brain':
+      return <BrainPanel />
     case 'users':
       return <UserManagementPanel />
-    case 'history':
-      return <AgentHistoryPanel />
-    case 'audit':
-      return <AuditTrailPanel />
-    case 'webhooks':
-      return <WebhookPanel />
-    case 'alerts':
-      return <AlertRulesPanel />
-    case 'gateways':
-      return <MultiGatewayPanel />
-    case 'gateway-config':
-      return <GatewayConfigPanel />
-    case 'integrations':
-      return <IntegrationsPanel />
     case 'settings':
       return <SettingsPanel />
-    case 'github':
-      return <GitHubSyncPanel />
-    case 'office':
-      return <OfficePanel />
-    case 'documents':
-      return <DocumentsPanel />
-    case 'super-admin':
-      return <SuperAdminPanel />
-    case 'workspaces':
-      return <SuperAdminPanel />
     default:
       return <Dashboard />
   }

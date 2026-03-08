@@ -472,182 +472,163 @@ export function SoulTab({
   )
 }
 
-// Memory Tab Component
-export function MemoryTab({
-  agent,
-  workingMemory,
-  onSave
-}: {
-  agent: Agent
-  workingMemory: string
-  onSave: (content: string, append?: boolean) => Promise<void>
-}) {
-  const [editing, setEditing] = useState(false)
-  const [content, setContent] = useState(workingMemory)
-  const [appendMode, setAppendMode] = useState(false)
-  const [newEntry, setNewEntry] = useState('')
+// Identity Tab - displays IDENTITY.md from filesystem
+export function IdentityTab({ agent }: { agent: Agent }) {
+  const [content, setContent] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [project, setProject] = useState<string | null>(null)
+  const [reportsTo, setReportsTo] = useState<string | null>(null)
 
   useEffect(() => {
-    setContent(workingMemory)
-  }, [workingMemory])
+    const agentId = agent.name.toLowerCase().replace(/\s+/g, '-')
+    fetch(`/api/brain/agents/${encodeURIComponent(agentId)}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        if (data) {
+          setContent(data.identity ?? null)
+          setProject(data.project ?? null)
+          setReportsTo(data.reportsTo ?? null)
+        }
+      })
+      .finally(() => setLoading(false))
+  }, [agent.name])
 
-  const handleSave = async () => {
-    if (appendMode && newEntry.trim()) {
-      await onSave(newEntry, true)
-      setNewEntry('')
-      setAppendMode(false)
-    } else {
-      await onSave(content)
-    }
-    setEditing(false)
-  }
-
-  const handleClear = async () => {
-    if (confirm('Are you sure you want to clear all working memory?')) {
-      await onSave('')
-      setContent('')
-      setEditing(false)
-    }
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+      </div>
+    )
   }
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex justify-between items-center">
-        <div>
-          <h4 className="text-lg font-medium text-foreground">Working Memory</h4>
-          <p className="text-xs text-muted-foreground mt-1">
-            This is <strong className="text-foreground">agent-level</strong> scratchpad memory (stored as WORKING.md in the database), not the workspace memory folder.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          {!editing && (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  setAppendMode(true)
-                  setEditing(true)
-                }}
-                className="px-3 py-1 text-sm bg-green-500/20 text-green-400 border border-green-500/30 rounded-md hover:bg-green-500/30 transition-smooth"
-              >
-                Add Entry
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-smooth"
-              >
-                Edit Memory
-              </button>
-            </>
+      <h4 className="text-lg font-medium text-foreground">IDENTITY.md</h4>
+      {(project || reportsTo) && (
+        <div className="flex gap-3 text-sm">
+          {project && (
+            <span className="px-2 py-1 rounded bg-primary/20 text-primary">
+              Scope: {project}
+            </span>
+          )}
+          {reportsTo && (
+            <span className="text-muted-foreground">Reports to: {reportsTo}</span>
           )}
         </div>
-      </div>
-
-      {/* Info Banner */}
-      <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 text-xs text-blue-300">
-        <strong className="text-blue-200">Agent Memory vs Workspace Memory:</strong>{' '}
-        This tab edits only this agent&apos;s private working memory (a scratchpad stored in the database).
-        To browse or edit all workspace memory files (daily logs, knowledge base, MEMORY.md, etc.), visit the{' '}
-        <Link href="/memory" className="text-blue-400 underline hover:text-blue-300">Memory Browser</Link> page.
-      </div>
-
-      {/* Memory Content */}
-      <div>
-        <label className="block text-sm font-medium text-muted-foreground mb-1">
-          Memory Content ({content.length} characters)
-        </label>
-        
-        {editing && appendMode ? (
-          <div className="space-y-2">
-            <div className="bg-surface-1/30 rounded p-4 max-h-40 overflow-y-auto">
-              <pre className="text-foreground whitespace-pre-wrap text-sm">{content}</pre>
-            </div>
-            <textarea
-              value={newEntry}
-              onChange={(e) => setNewEntry(e.target.value)}
-              rows={5}
-              className="w-full bg-surface-1 text-foreground border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50"
-              placeholder="Add new memory entry..."
-            />
-          </div>
-        ) : editing ? (
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            rows={15}
-            className="w-full bg-surface-1 text-foreground border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 font-mono text-sm"
-            placeholder="Working memory for temporary notes, current tasks, and session data..."
-          />
+      )}
+      <div className="bg-surface-1/30 rounded p-4 max-h-96 overflow-y-auto">
+        {content ? (
+          <pre className="text-foreground whitespace-pre-wrap text-sm font-mono">{content}</pre>
         ) : (
-          <div className="bg-surface-1/30 rounded p-4 max-h-96 overflow-y-auto">
-            {content ? (
-              <pre className="text-foreground whitespace-pre-wrap text-sm">{content}</pre>
-            ) : (
-              <p className="text-muted-foreground italic">No working memory content</p>
-            )}
-          </div>
+          <p className="text-muted-foreground italic">No IDENTITY.md found</p>
         )}
       </div>
+    </div>
+  )
+}
 
-      {/* Actions */}
-      {editing && (
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={handleSave}
-            className="flex-1 bg-primary text-primary-foreground py-2 rounded-md hover:bg-primary/90 transition-smooth"
-          >
-            {appendMode ? 'Add Entry' : 'Save Memory'}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEditing(false)
-              setAppendMode(false)
-              setContent(workingMemory)
-              setNewEntry('')
-            }}
-            className="flex-1 bg-secondary text-muted-foreground py-2 rounded-md hover:bg-surface-2 transition-smooth"
-          >
-            Cancel
-          </button>
-          {!appendMode && (
-            <button
-              type="button"
-              onClick={handleClear}
-              className="px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-md hover:bg-red-500/30 transition-smooth"
-            >
-              Clear All
-            </button>
-          )}
+// Memory Tab - BRAIN content scoped by agent's project
+export function MemoryTab({
+  agent
+}: {
+  agent: Agent
+  workingMemory?: string
+  onSave?: (content: string, append?: boolean) => Promise<void>
+}) {
+  const [project, setProject] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [memoryTree, setMemoryTree] = useState<any[]>([])
+
+  useEffect(() => {
+    const agentId = agent.name.toLowerCase().replace(/\s+/g, '-')
+    fetch(`/api/brain/agents/${encodeURIComponent(agentId)}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        const proj = data?.project ?? null
+        setProject(proj)
+        return proj
+      })
+      .then((proj) => {
+        if (proj) {
+          return fetch(`/api/memory?action=tree`).then((r) => r.json()).then((d) => ({ proj, tree: d.tree || [] }))
+        }
+        return { proj: null, tree: [] }
+      })
+      .then(({ proj, tree }) => {
+        const projectsDir = tree.find((f: any) => f.name === 'projects')
+        const projectDir = projectsDir?.children?.find((c: any) => c.name === proj)
+        setMemoryTree(projectDir?.children || [])
+      })
+      .finally(() => setLoading(false))
+  }, [agent.name])
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+      </div>
+    )
+  }
+
+  if (!project) {
+    return (
+      <div className="p-6 space-y-4">
+        <h4 className="text-lg font-medium text-foreground">Memory</h4>
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-amber-300">
+          No project bound. Add <code className="bg-black/20 px-1 rounded">project: &lt;slug&gt;</code> to IDENTITY.md front-matter for project-scoped memory.
+        </div>
+        <p className="text-muted-foreground text-sm">
+          Browse full BRAIN at <Link href="/brain" className="text-primary underline">Brain</Link>.
+        </p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-6 space-y-4">
+      <h4 className="text-lg font-medium text-foreground">BRAIN Memory</h4>
+      <p className="text-sm text-muted-foreground">
+        Scope: <span className="text-foreground font-medium">{project}</span>
+      </p>
+      <p className="text-sm text-muted-foreground">
+        Browse and edit at <Link href="/brain" className="text-primary underline">Brain</Link>.
+      </p>
+      {memoryTree.length > 0 && (
+        <div className="bg-surface-1/30 rounded p-4">
+          <div className="text-xs text-muted-foreground mb-2">Project files:</div>
+          <ul className="space-y-1 text-sm">
+            {memoryTree.map((f: any) => (
+              <li key={f.path}>{f.type === 'directory' ? `📁 ${f.name}/` : `📄 ${f.name}`}</li>
+            ))}
+          </ul>
         </div>
       )}
     </div>
   )
 }
 
-// Tasks Tab Component
+// Tasks Tab - from BRAIN TASKS.md filtered by owner
 export function TasksTab({ agent }: { agent: Agent }) {
   const [tasks, setTasks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [project, setProject] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchTasks = async () => {
-      try {
-        const response = await fetch(`/api/tasks?assigned_to=${agent.name}`)
-        if (response.ok) {
-          const data = await response.json()
-          setTasks(data.tasks || [])
+    const agentId = agent.name.toLowerCase().replace(/\s+/g, '-')
+    fetch(`/api/brain/agents/${encodeURIComponent(agentId)}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        const proj = data?.project
+        setProject(proj ?? null)
+        if (proj) {
+          return fetch(`/api/brain/projects/${encodeURIComponent(proj)}/tasks?owner=${encodeURIComponent(agent.name)}`)
+            .then((r) => r.json())
         }
-      } catch (error) {
-        log.error('Failed to fetch tasks:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchTasks()
+        return { tasks: [] }
+      })
+      .then((data) => setTasks(data?.tasks || []))
+      .catch(() => setTasks([]))
+      .finally(() => setLoading(false))
   }, [agent.name])
 
   if (loading) {
@@ -665,32 +646,24 @@ export function TasksTab({ agent }: { agent: Agent }) {
     <div className="p-6 space-y-4">
       <h4 className="text-lg font-medium text-foreground">Assigned Tasks</h4>
       
-      {tasks.length === 0 ? (
+          {!project ? (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-amber-300">
+          No project bound. Add <code className="bg-black/20 px-1 rounded">project: &lt;slug&gt;</code> to IDENTITY.md to see tasks.
+        </div>
+      ) : tasks.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-8 text-muted-foreground/50">
-          <div className="w-10 h-10 rounded-full bg-surface-2 flex items-center justify-center mb-2">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-              <rect x="3" y="2" width="10" height="12" rx="1" />
-              <path d="M6 6h4M6 9h3" />
-            </svg>
-          </div>
-          <p className="text-sm">No tasks assigned</p>
+          <p className="text-sm">No tasks assigned to this agent</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {tasks.map(task => (
+          {tasks.map((task: any) => (
             <div key={task.id} className="bg-surface-1/50 rounded-lg p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <Link href={`/tasks?taskId=${task.id}`} className="font-medium text-foreground hover:text-primary transition-colors">
-                    {task.title}
-                  </Link>
+                  <span className="font-medium text-foreground">{task.description || task.id}</span>
                   <div className="text-xs text-muted-foreground mt-1">
-                    {task.ticket_ref || `Task #${task.id}`}
-                    {task.project_name ? ` · ${task.project_name}` : ''}
+                    {task.id} · {project}
                   </div>
-                  {task.description && (
-                    <p className="text-foreground/80 text-sm mt-1">{task.description}</p>
-                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`px-2 py-1 text-xs rounded-md font-medium ${
@@ -712,12 +685,6 @@ export function TasksTab({ agent }: { agent: Agent }) {
                   </span>
                 </div>
               </div>
-              
-              {task.due_date && (
-                <div className="text-xs text-muted-foreground mt-2">
-                  Due: {new Date(task.due_date * 1000).toLocaleDateString()}
-                </div>
-              )}
             </div>
           ))}
         </div>
@@ -726,7 +693,52 @@ export function TasksTab({ agent }: { agent: Agent }) {
   )
 }
 
-// Activity Tab Component
+// Logs Tab - project logs for agent
+export function LogsTab({ agent }: { agent: Agent }) {
+  const [project, setProject] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const agentId = agent.name.toLowerCase().replace(/\s+/g, '-')
+    fetch(`/api/brain/agents/${encodeURIComponent(agentId)}`)
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => {
+        setProject(data?.project ?? null)
+      })
+      .finally(() => setLoading(false))
+  }, [agent.name])
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+      </div>
+    )
+  }
+
+  if (!project) {
+    return (
+      <div className="p-6 space-y-4">
+        <h4 className="text-lg font-medium text-foreground">Logs</h4>
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 text-amber-300">
+          No project bound. Add project to IDENTITY.md to view project logs.
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-6 space-y-4">
+      <h4 className="text-lg font-medium text-foreground">Logs</h4>
+      <p className="text-sm text-muted-foreground">
+        Project: <span className="text-foreground">{project}</span>. View structure and logs at{' '}
+        <Link href="/brain" className="text-primary underline">Brain</Link> → projects/{project}/logs/
+      </p>
+    </div>
+  )
+}
+
+// Activity Tab Component (deprecated - kept for backwards compat)
 export function ActivityTab({ agent }: { agent: Agent }) {
   const [activities, setActivities] = useState<any[]>([])
   const [loading, setLoading] = useState(true)

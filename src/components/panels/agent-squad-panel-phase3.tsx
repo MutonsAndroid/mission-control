@@ -6,13 +6,14 @@ import { createClientLogger } from '@/lib/client-logger'
 import { AgentAvatar } from '@/components/ui/agent-avatar'
 import {
   OverviewTab,
+  IdentityTab,
   SoulTab,
   MemoryTab,
   TasksTab,
-  ActivityTab,
-  ConfigTab,
+  LogsTab,
   CreateAgentModal
 } from './agent-detail-tabs'
+import { AgentHierarchyTree } from './agent-hierarchy-tree'
 
 const log = createClientLogger('AgentSquadPhase3')
 
@@ -89,6 +90,7 @@ export function AgentSquadPanelPhase3() {
   const [autoRefresh, setAutoRefresh] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [syncToast, setSyncToast] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'grid' | 'hierarchy'>('grid')
 
   // Sync agents from gateway config
   const syncFromConfig = async () => {
@@ -270,6 +272,20 @@ export function AgentSquadPanelPhase3() {
         </div>
         
         <div className="flex gap-2">
+          <div className="flex gap-1">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`px-2 py-1 text-xs rounded ${viewMode === 'grid' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground'}`}
+            >
+              Grid
+            </button>
+            <button
+              onClick={() => setViewMode('hierarchy')}
+              className={`px-2 py-1 text-xs rounded ${viewMode === 'hierarchy' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground'}`}
+            >
+              Hierarchy
+            </button>
+          </div>
           <button
             onClick={() => setAutoRefresh(!autoRefresh)}
             className={`px-3 py-1.5 text-sm rounded-md transition-smooth ${
@@ -334,6 +350,10 @@ export function AgentSquadPanelPhase3() {
             </div>
             <p className="text-sm font-medium">No agents found</p>
             <p className="text-xs mt-1">Add your first agent to get started</p>
+          </div>
+        ) : viewMode === 'hierarchy' ? (
+          <div className="max-w-2xl">
+            <AgentHierarchyTree agents={agents} onSelectAgent={(agent) => setSelectedAgent(agents.find((a) => a.id === agent.id) ?? null)} />
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -542,7 +562,7 @@ function AgentDetailModalPhase3({
     setAgent(prev => (initialAgent.updated_at != null && (prev.updated_at == null || initialAgent.updated_at >= prev.updated_at)) ? initialAgent : prev)
   }, [initialAgent, initialAgent.updated_at])
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'soul' | 'memory' | 'config' | 'tasks' | 'activity'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'identity' | 'soul' | 'memory' | 'tasks' | 'logs'>('overview')
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState({
     role: initialAgent.role,
@@ -666,39 +686,13 @@ function AgentDetailModalPhase3({
     }
   }
 
-  const handleMemorySave = async (content: string, append: boolean = false) => {
-    setTabError(null)
-    try {
-      const response = await fetch(`/api/agents/${agent.id}/memory`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          working_memory: content,
-          append
-        })
-      })
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}))
-        throw new Error(data.error || 'Failed to update memory')
-      }
-      
-      const data = await response.json()
-      setFormData(prev => ({ ...prev, working_memory: data.working_memory }))
-      onUpdate()
-    } catch (error) {
-      log.error('Failed to update memory:', error)
-      setTabError(error instanceof Error ? error.message : 'Failed to update memory')
-    }
-  }
-
   const tabs = [
     { id: 'overview', label: 'Overview', icon: 'O' },
-    { id: 'soul', label: 'SOUL', icon: 'S' },
+    { id: 'identity', label: 'Identity', icon: 'I' },
+    { id: 'soul', label: 'Soul', icon: 'S' },
     { id: 'memory', label: 'Memory', icon: 'M' },
     { id: 'tasks', label: 'Tasks', icon: 'T' },
-    { id: 'config', label: 'Config', icon: 'C' },
-    { id: 'activity', label: 'Activity', icon: 'A' }
+    { id: 'logs', label: 'Logs', icon: 'L' }
   ]
 
   return (
@@ -790,6 +784,9 @@ function AgentDetailModalPhase3({
             />
           )}
           
+          {activeTab === 'identity' && (
+            <IdentityTab agent={agent} />
+          )}
           {activeTab === 'soul' && (
             <SoulTab
               agent={agent}
@@ -798,27 +795,14 @@ function AgentDetailModalPhase3({
               onSave={handleSoulSave}
             />
           )}
-          
           {activeTab === 'memory' && (
-            <MemoryTab
-              agent={agent}
-              workingMemory={formData.working_memory}
-              onSave={handleMemorySave}
-            />
+            <MemoryTab agent={agent} />
           )}
-          
           {activeTab === 'tasks' && (
             <TasksTab agent={agent} />
           )}
-          
-          {activeTab === 'config' && (
-            <ConfigTab agent={agent} onSave={(updatedAgent) => {
-              onUpdate(updatedAgent)
-            }} />
-          )}
-
-          {activeTab === 'activity' && (
-            <ActivityTab agent={agent} />
+          {activeTab === 'logs' && (
+            <LogsTab agent={agent} />
           )}
         </div>
       </div>

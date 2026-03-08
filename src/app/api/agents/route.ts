@@ -149,7 +149,9 @@ export async function POST(request: NextRequest) {
       gateway_config,
       write_to_gateway,
       provision_openclaw_workspace,
-      openclaw_workspace_path
+      openclaw_workspace_path,
+      project,
+      structure_log_purpose
     } = body;
 
     const openclawId = (openclaw_id || name || 'agent')
@@ -261,6 +263,18 @@ export async function POST(request: NextRequest) {
 
     // Broadcast to SSE clients
     eventBus.broadcast('agent.created', parsedAgent);
+
+    // Append to BRAIN structure log when project is provided (Sampson ecosystem)
+    if (project && typeof project === 'string' && /^[a-z0-9-_]+$/.test(project)) {
+      try {
+        const { appendStructureLog } = await import('@/lib/brain-io');
+        const purpose = structure_log_purpose || 'Created via Mission Control';
+        const entry = `Created ${name}\nPurpose: ${purpose}\nAuthorized by: ${auth.user.username}`;
+        appendStructureLog(project, entry);
+      } catch (structureErr) {
+        logger.warn({ err: structureErr, project, name }, 'Failed to append structure log');
+      }
+    }
 
     // Write to gateway config if requested
     if (write_to_gateway && finalConfig) {

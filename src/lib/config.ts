@@ -31,8 +31,12 @@ const openclawWorkspaceDir =
   (openclawStateDir ? path.join(openclawStateDir, 'workspace') : '')
 const defaultMemoryDir = (() => {
   if (process.env.OPENCLAW_MEMORY_DIR) return process.env.OPENCLAW_MEMORY_DIR
-  // Prefer OpenClaw workspace memory context (daily notes + knowledge-base)
-  // when available; fallback to legacy sqlite memory path.
+  // Prefer BRAIN root when OpenClaw workspace has BRAIN (Sampson ecosystem)
+  const brainPath = openclawWorkspaceDir ? path.join(openclawWorkspaceDir, 'BRAIN') : ''
+  if (brainPath && fs.existsSync(brainPath) && fs.statSync(brainPath).isDirectory()) {
+    return brainPath
+  }
+  // Fallback: workspace with memory/knowledge-base
   if (
     openclawWorkspaceDir &&
     (fs.existsSync(path.join(openclawWorkspaceDir, 'memory')) ||
@@ -67,10 +71,14 @@ export const config = {
     (openclawStateDir ? path.join(openclawStateDir, 'logs') : ''),
   tempLogsDir: process.env.CLAWDBOT_TMP_LOG_DIR || '',
   memoryDir: defaultMemoryDir,
-  memoryAllowedPrefixes:
-    defaultMemoryDir === openclawWorkspaceDir
-      ? ['memory/', 'knowledge-base/']
-      : [],
+  memoryAllowedPrefixes: (() => {
+    const brainPath = openclawWorkspaceDir ? path.join(openclawWorkspaceDir, 'BRAIN') : ''
+    const isBrain = brainPath && defaultMemoryDir === brainPath
+    // BRAIN: empty = allow full tree under BRAIN root; path security via resolveWithin
+    if (isBrain) return []
+    if (defaultMemoryDir === openclawWorkspaceDir) return ['memory/', 'knowledge-base/']
+    return []
+  })(),
   soulTemplatesDir:
     process.env.OPENCLAW_SOUL_TEMPLATES_DIR ||
     (openclawStateDir ? path.join(openclawStateDir, 'templates', 'souls') : ''),

@@ -1,0 +1,734 @@
+'use client'
+
+import React, { useState, useEffect, useCallback } from 'react'
+import { useMissionControl } from '@/store'
+import { createClientLogger } from '@/lib/client-logger'
+
+const log = createClientLogger('BrainPanel')
+
+interface MemoryFile {
+  path: string
+  name: string
+  type: 'file' | 'directory'
+  size?: number
+  modified?: number
+  children?: MemoryFile[]
+}
+
+export function BrainPanel() {
+  const {
+    memoryFiles,
+    selectedMemoryFile,
+    memoryContent,
+    dashboardMode,
+    setMemoryFiles,
+    setSelectedMemoryFile,
+    setMemoryContent
+  } = useMissionControl()
+  const isLocal = dashboardMode === 'local'
+
+  const [isLoading, setIsLoading] = useState(false)
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isSearching, setIsSearching] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [editedContent, setEditedContent] = useState('')
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState<'all' | 'index' | 'summaries' | 'capabilities' | 'projects'>('all')
+
+  const loadFileTree = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const response = await fetch('/api/memory?action=tree')
+      const data = await response.json()
+      setMemoryFiles(data.tree || [])
+
+      // Auto-expand BRAIN structure
+      setExpandedFolders(new Set(['index.md', 'summaries', 'capabilities', 'projects']))
+    } catch (error) {
+      log.error('Failed to load BRAIN file tree:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [setMemoryFiles])
+
+  useEffect(() => {
+    loadFileTree()
+  }, [loadFileTree])
+
+  const getFilteredFiles = () => {
+    if (activeTab === 'all') return memoryFiles
+
+    const tabPrefixes: Record<string, string[]> = {
+      index: ['index.md'],
+      summaries: ['summaries/'],
+      capabilities: ['capabilities/'],
+      projects: ['projects/']
+    }
+    const prefixes = tabPrefixes[activeTab] || []
+
+    return memoryFiles.filter((file) => {
+      const normalizedPath = `${file.path.replace(/\\/g, '/')}`
+      const normalizedPathSlash = normalizedPath.endsWith('/') ? normalizedPath : `${normalizedPath}/`
+      return prefixes.some((prefix) =>
+        prefix.endsWith('/')
+          ? normalizedPathSlash.startsWith(prefix) || normalizedPath === prefix.replace(/\/$/, '')
+          : normalizedPath === prefix || normalizedPath.startsWith(prefix + '/')
+      )
+    })
+  }
+
+  const loadFileContent = async (filePath: string) => {
+    setIsLoading(true)
+    try {
+      const response = await fetch(`/api/memory?action=content&path=${encodeURIComponent(filePath)}`)
+      const data = await response.json()
+
+      if (data.content !== undefined) {
+        setSelectedMemoryFile(filePath)
+        setMemoryContent(data.content)
+      } else {
+        alert(data.error || 'Failed to load file content')
+      }
+    } catch (error) {
+      log.error('Failed to load file content:', error)
+      alert('Network error occurred')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const searchFiles = async () => {
+    if (!searchQuery.trim()) return
+
+    setIsSearching(true)
+    try {
+      const response = await fetch(`/api/memory?action=search&query=${encodeURIComponent(searchQuery)}`)
+      const data = await response.json()
+      setSearchResults(data.results || [])
+    } catch (error) {
+      log.error('Search failed:', error)
+      setSearchResults([])
+    } finally {
+      setIsSearching(false)
+    }
+  }
+
+  const toggleFolder = (folderPath: string) => {
+    const newExpanded = new Set(expandedFolders)
+    if (newExpanded.has(folderPath)) {
+      newExpanded.delete(folderPath)
+    } else {
+      newExpanded.add(folderPath)
+    }
+    setExpandedFolders(newExpanded)
+  }
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 B'
+    const k = 1024
+    const sizes = ['B', 'KB', 'MB', 'GB']
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+  }
+
+  const startEditing = () => {
+    setIsEditing(true)
+    setEditedContent(memoryContent ?? '')
+  }
+
+  const cancelEditing = () => {
+    setIsEditing(false)
+    setEditedContent('')
+  }
+
+  const saveFile = async () => {
+    if (!selectedMemoryFile) return
+
+    setIsSaving(true)
+    try {
+      const response = await fetch(`/api/memory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'save',
+          path: selectedMemoryFile,
+          content: editedContent
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setMemoryContent(editedContent)
+        setIsEditing(false)
+        setEditedContent('')
+        loadFileTree()
+      } else {
+        alert(data.error || 'Failed to save file')
+      }
+    } catch (error) {
+      log.error('Failed to save file:', error)
+      alert('Network error occurred')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const createNewFile = async (filePath: string, content: string = '') => {
+    try {
+      const response = await fetch(`/api/memory`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          path: filePath,
+          content
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        loadFileTree()
+        loadFileContent(filePath)
+      } else {
+        alert(data.error || 'Failed to create file')
+      }
+    } catch (error) {
+      log.error('Failed to create file:', error)
+      alert('Network error occurred')
+    }
+  }
+
+  const deleteFile = async () => {
+    if (!selectedMemoryFile) return
+
+    try {
+      const response = await fetch(`/api/memory`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'delete',
+          path: selectedMemoryFile
+        })
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setSelectedMemoryFile('')
+        setMemoryContent('')
+        setShowDeleteConfirm(false)
+        loadFileTree()
+      } else {
+        alert(data.error || 'Failed to delete file')
+      }
+    } catch (error) {
+      log.error('Failed to delete file:', error)
+      alert('Network error occurred')
+    }
+  }
+
+  const renderFileTree = (files: MemoryFile[], level = 0): React.ReactElement[] => {
+    return files.map((file) => (
+      <div key={file.path} style={{ marginLeft: `${level * 16}px` }}>
+        {file.type === 'directory' ? (
+          <div>
+            <div
+              className="flex items-center space-x-2 py-1 px-2 hover:bg-secondary rounded cursor-pointer"
+              onClick={() => toggleFolder(file.path)}
+            >
+              <span className="text-blue-400">
+                {expandedFolders.has(file.path) ? '📂' : '📁'}
+              </span>
+              <span className="text-foreground">{file.name}</span>
+              <span className="text-xs text-muted-foreground">
+                ({file.children?.length || 0} items)
+              </span>
+            </div>
+            {expandedFolders.has(file.path) && file.children && (
+              <div>{renderFileTree(file.children, level + 1)}</div>
+            )}
+          </div>
+        ) : (
+          <div
+            className={`flex items-center space-x-2 py-1 px-2 hover:bg-secondary rounded cursor-pointer ${
+              selectedMemoryFile === file.path ? 'bg-primary/20 border border-primary/30' : ''
+            }`}
+            onClick={() => loadFileContent(file.path)}
+          >
+            <span className="text-muted-foreground">
+              {file.name.endsWith('.md') ? '📄' :
+               file.name.endsWith('.txt') ? '📝' :
+               file.name.endsWith('.json') ? '📋' : '📄'}
+            </span>
+            <span className="text-foreground flex-1">{file.name}</span>
+            <div className="flex flex-col text-xs text-muted-foreground text-right">
+              {file.size != null && <span>{formatFileSize(file.size)}</span>}
+              {file.modified != null && <span>{new Date(file.modified).toLocaleDateString()}</span>}
+            </div>
+          </div>
+        )}
+      </div>
+    ))
+  }
+
+  const renderInlineFormatting = (text: string): React.ReactNode[] => {
+    const parts: React.ReactNode[] = []
+    const regex = /(\*\*.*?\*\*|\*.*?\*)/g
+    let lastIndex = 0
+    let match: RegExpExecArray | null
+    let key = 0
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index))
+      }
+      const m = match[0]
+      if (m.startsWith('**') && m.endsWith('**')) {
+        parts.push(<strong key={key++}>{m.slice(2, -2)}</strong>)
+      } else if (m.startsWith('*') && m.endsWith('*')) {
+        parts.push(<em key={key++}>{m.slice(1, -1)}</em>)
+      }
+      lastIndex = regex.lastIndex
+    }
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex))
+    }
+    return parts
+  }
+
+  const renderMarkdown = (content: string) => {
+    const lines = content.split('\n')
+    const elements: React.ReactElement[] = []
+    const seenHeaders = new Set<string>()
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      const trimmedLine = line.trim()
+
+      if (trimmedLine.startsWith('# ')) {
+        const headerText = trimmedLine.slice(2)
+        const headerId = `h1-${headerText.toLowerCase().replace(/\s+/g, '-')}`
+        if (seenHeaders.has(headerId)) continue
+        seenHeaders.add(headerId)
+        elements.push(<h1 key={`${i}-${headerId}`} className="text-2xl font-bold mt-6 mb-3 text-primary">{headerText}</h1>)
+      } else if (trimmedLine.startsWith('## ')) {
+        const headerText = trimmedLine.slice(3)
+        const headerId = `h2-${headerText.toLowerCase().replace(/\s+/g, '-')}`
+        if (seenHeaders.has(headerId)) continue
+        seenHeaders.add(headerId)
+        elements.push(<h2 key={`${i}-${headerId}`} className="text-xl font-semibold mt-5 mb-3 text-foreground">{headerText}</h2>)
+      } else if (trimmedLine.startsWith('### ')) {
+        const headerText = trimmedLine.slice(4)
+        const headerId = `h3-${headerText.toLowerCase().replace(/\s+/g, '-')}`
+        if (seenHeaders.has(headerId)) continue
+        seenHeaders.add(headerId)
+        elements.push(<h3 key={`${i}-${headerId}`} className="text-lg font-semibold mt-4 mb-2 text-foreground">{headerText}</h3>)
+      } else if (trimmedLine.startsWith('- ')) {
+        elements.push(<li key={`${i}-li`} className="ml-6 mb-1 list-disc">{trimmedLine.slice(2)}</li>)
+      } else if (trimmedLine.startsWith('**') && trimmedLine.endsWith('**') && trimmedLine.length > 4) {
+        elements.push(<p key={`${i}-bold`} className="font-bold mb-2">{trimmedLine.slice(2, -2)}</p>)
+      } else if (trimmedLine === '') {
+        elements.push(<div key={`${i}-space`} className="mb-2" />)
+      } else if (trimmedLine.length > 0) {
+        elements.push(
+          <p key={`${i}-p`} className="mb-2">
+            {renderInlineFormatting(trimmedLine)}
+          </p>
+        )
+      }
+    }
+
+    return elements
+  }
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="border-b border-border pb-4">
+        <h1 className="text-3xl font-bold text-foreground">BRAIN</h1>
+        <p className="text-muted-foreground mt-2">
+          {isLocal
+            ? 'View and edit the canonical memory filesystem (index, summaries, capabilities, projects)'
+            : 'Explore the BRAIN memory structure'}
+        </p>
+
+        <div className="flex gap-2 mt-4">
+          {(['all', 'index', 'summaries', 'capabilities', 'projects'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 rounded font-medium transition-colors capitalize ${
+                activeTab === tab
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-secondary text-foreground hover:bg-secondary/80'
+              }`}
+            >
+              {tab === 'all' ? 'All' : tab}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-lg p-4">
+        <div className="flex space-x-4">
+          <div className="flex-1">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && searchFiles()}
+              placeholder="Search in BRAIN..."
+              className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+          </div>
+          <button
+            onClick={searchFiles}
+            disabled={isSearching || !searchQuery.trim()}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {isSearching ? 'Searching...' : 'Search'}
+          </button>
+          <button
+            onClick={loadFileTree}
+            disabled={isLoading}
+            className="px-4 py-2 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-md font-medium hover:bg-blue-500/30 transition-colors disabled:opacity-50"
+          >
+            Refresh
+          </button>
+        </div>
+
+        {searchResults.length > 0 && (
+          <div className="mt-4 border-t border-border pt-4">
+            <h3 className="font-medium text-foreground mb-2">Search Results ({searchResults.length})</h3>
+            <div className="space-y-2 max-h-32 overflow-y-auto">
+              {searchResults.map((result, index) => (
+                <div
+                  key={index}
+                  className="flex items-center justify-between p-2 bg-secondary rounded cursor-pointer hover:bg-secondary/80"
+                  onClick={() => loadFileContent(result.path)}
+                >
+                  <div>
+                    <span className="font-medium text-foreground">{result.name}</span>
+                    <span className="text-sm text-muted-foreground ml-2">({result.path})</span>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{result.matches} matches</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="grid lg:grid-cols-3 gap-6">
+        <div className="bg-card border border-border rounded-lg p-6">
+          <h2 className="text-xl font-semibold mb-4">BRAIN Structure</h2>
+
+          {isLoading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+              <span className="ml-3 text-muted-foreground">Loading...</span>
+            </div>
+          ) : (
+            <div className="max-h-96 overflow-y-auto text-sm">
+              {getFilteredFiles().length === 0 ? (
+                <div className="text-center text-muted-foreground py-8">
+                  No BRAIN files found
+                </div>
+              ) : (
+                renderFileTree(getFilteredFiles())
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="lg:col-span-2 bg-card border border-border rounded-lg p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold">{selectedMemoryFile || 'File Content'}</h2>
+            <div className="flex items-center gap-2">
+              {selectedMemoryFile && (
+                <>
+                  {!isEditing ? (
+                    <>
+                      <button
+                        onClick={startEditing}
+                        className="px-3 py-1 bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-md text-sm hover:bg-blue-500/30 transition-smooth"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => setShowDeleteConfirm(true)}
+                        className="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded-md text-sm hover:bg-red-500/30 transition-smooth"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={saveFile}
+                        disabled={isSaving}
+                        className="px-3 py-1 bg-green-500/20 text-green-400 border border-green-500/30 rounded-md text-sm hover:bg-green-500/30 disabled:opacity-50 transition-smooth"
+                      >
+                        {isSaving ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        onClick={cancelEditing}
+                        className="px-3 py-1 bg-secondary text-muted-foreground rounded-md text-sm hover:bg-secondary/80 transition-smooth"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => {
+                      setSelectedMemoryFile('')
+                      setMemoryContent('')
+                      setIsEditing(false)
+                      setEditedContent('')
+                    }}
+                    className="text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    Close
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="px-3 py-1 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90 transition-colors"
+              >
+                + New File
+              </button>
+            </div>
+          </div>
+
+          <div className="border border-border rounded-lg min-h-96 overflow-auto">
+            {isLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+                <span className="ml-3 text-muted-foreground">Loading file...</span>
+              </div>
+            ) : memoryContent !== null ? (
+              <div className="p-4 w-full">
+                {isEditing ? (
+                  <textarea
+                    value={editedContent}
+                    onChange={(e) => setEditedContent(e.target.value)}
+                    className="w-full min-h-[500px] p-3 bg-surface-1 text-foreground font-mono text-sm border border-border rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    placeholder="Edit file content..."
+                  />
+                ) : selectedMemoryFile?.endsWith('.md') ? (
+                  <div className="prose prose-invert max-w-none w-full">
+                    <div className="mb-4 text-sm text-muted-foreground">
+                      File: {selectedMemoryFile} | Size: {memoryContent.length} chars
+                    </div>
+                    <div className="whitespace-pre-wrap break-words">
+                      {renderMarkdown(memoryContent)}
+                    </div>
+                  </div>
+                ) : selectedMemoryFile?.endsWith('.json') ? (
+                  <div>
+                    <div className="mb-4 text-sm text-muted-foreground">
+                      File: {selectedMemoryFile} | Size: {memoryContent.length} chars
+                    </div>
+                    <pre className="text-sm overflow-auto whitespace-pre-wrap break-words">
+                      <code>{JSON.stringify(JSON.parse(memoryContent), null, 2)}</code>
+                    </pre>
+                  </div>
+                ) : (
+                  <div>
+                    <div className="mb-4 text-sm text-muted-foreground">
+                      File: {selectedMemoryFile} | Size: {memoryContent.length} chars
+                    </div>
+                    <pre className="text-sm whitespace-pre-wrap break-words overflow-auto">
+                      {memoryContent}
+                    </pre>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-32 text-muted-foreground">
+                <span>Select a file to view its content</span>
+                <button
+                  onClick={() => setShowCreateModal(true)}
+                  className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90 transition-colors"
+                >
+                  Create New File
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {showCreateModal && (
+        <CreateFileModal
+          onClose={() => setShowCreateModal(false)}
+          onCreate={createNewFile}
+        />
+      )}
+
+      {showDeleteConfirm && selectedMemoryFile && (
+        <DeleteConfirmModal
+          fileName={selectedMemoryFile}
+          onClose={() => setShowDeleteConfirm(false)}
+          onConfirm={deleteFile}
+        />
+      )}
+    </div>
+  )
+}
+
+function CreateFileModal({
+  onClose,
+  onCreate
+}: {
+  onClose: () => void
+  onCreate: (path: string, content: string) => void
+}) {
+  const [fileName, setFileName] = useState('')
+  const [filePath, setFilePath] = useState('summaries/')
+  const [initialContent, setInitialContent] = useState('')
+  const [fileType, setFileType] = useState('md')
+
+  const handleCreate = () => {
+    if (!fileName.trim()) {
+      alert('Please enter a file name')
+      return
+    }
+
+    const fullPath = filePath + fileName + '.' + fileType
+    onCreate(fullPath, initialContent)
+    onClose()
+  }
+
+  const fileTypesWithTemplates = {
+    md: '# New Document\n\n## Overview\n\n## Details\n\n',
+    json: '{\n  "name": "",\n  "description": "",\n  "data": {}\n}',
+    txt: ''
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-card border border-border rounded-lg max-w-md w-full p-6 shadow-xl">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold text-foreground">Create New File</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl transition-smooth">×</button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">Directory Path</label>
+            <select
+              value={filePath}
+              onChange={(e) => setFilePath(e.target.value)}
+              className="w-full px-3 py-2 bg-surface-1 border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+            >
+              <option value="summaries/">summaries/</option>
+              <option value="capabilities/">capabilities/</option>
+              <option value="projects/">projects/</option>
+              <option value="">root</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">File Name</label>
+            <input
+              type="text"
+              value={fileName}
+              onChange={(e) => setFileName(e.target.value)}
+              placeholder="my-file"
+              className="w-full px-3 py-2 bg-surface-1 border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">File Type</label>
+            <select
+              value={fileType}
+              onChange={(e) => {
+                setFileType(e.target.value)
+                setInitialContent(fileTypesWithTemplates[e.target.value as keyof typeof fileTypesWithTemplates] ?? '')
+              }}
+              className="w-full px-3 py-2 bg-surface-1 border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+            >
+              <option value="md">Markdown (.md)</option>
+              <option value="json">JSON (.json)</option>
+              <option value="txt">Text (.txt)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-2">Initial Content (optional)</label>
+            <textarea
+              value={initialContent}
+              onChange={(e) => setInitialContent(e.target.value)}
+              className="w-full h-24 px-3 py-2 bg-surface-1 border border-border rounded-md text-foreground placeholder-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none font-mono text-sm"
+              placeholder="Template content..."
+            />
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={handleCreate}
+              disabled={!fileName.trim()}
+              className="flex-1 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-smooth"
+            >
+              Create File
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-secondary text-muted-foreground rounded-md hover:bg-secondary/80 transition-smooth"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DeleteConfirmModal({
+  fileName,
+  onClose,
+  onConfirm
+}: {
+  fileName: string
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-card border border-border rounded-lg max-w-md w-full p-6 shadow-xl">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold text-red-400">Confirm Deletion</h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xl transition-smooth">×</button>
+        </div>
+
+        <div className="space-y-4">
+          <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-lg">
+            <p className="text-sm">You are about to permanently delete:</p>
+            <p className="font-mono text-foreground mt-2 bg-surface-1 p-2 rounded-md text-sm">{fileName}</p>
+            <p className="text-xs mt-2 text-red-400/70">This action cannot be undone.</p>
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              onClick={onConfirm}
+              className="flex-1 px-4 py-2 bg-red-500/20 text-red-400 border border-red-500/30 rounded-md hover:bg-red-500/30 transition-smooth"
+            >
+              Delete Permanently
+            </button>
+            <button
+              onClick={onClose}
+              className="px-4 py-2 bg-secondary text-muted-foreground rounded-md hover:bg-secondary/80 transition-smooth"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
