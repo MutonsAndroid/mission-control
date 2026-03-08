@@ -4,6 +4,7 @@ import path from 'node:path'
 import { locateOpenClawInstall } from '@/lib/memory/locate'
 import { requireRole } from '@/lib/auth'
 import { logger } from '@/lib/logger'
+import { createProject } from '@/lib/brain-project-create'
 
 export interface BrainProject {
   slug: string
@@ -64,5 +65,40 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     logger.error({ err: error }, 'GET /api/brain/projects error')
     return NextResponse.json({ error: 'Failed to fetch projects' }, { status: 500 })
+  }
+}
+
+export async function POST(request: NextRequest) {
+  const auth = requireRole(request, 'operator')
+  if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+
+  try {
+    const body = await request.json()
+    const name = String(body?.name || '').trim()
+    const mission = String(body?.mission || '').trim()
+    const projectManagerModel = String(body?.projectManagerModel || 'gpt-5-mini').trim()
+    const notes = body?.notes ? String(body.notes).trim() : undefined
+
+    if (!name) {
+      return NextResponse.json({ error: 'Project name is required' }, { status: 400 })
+    }
+    if (!mission) {
+      return NextResponse.json({ error: 'Project mission is required' }, { status: 400 })
+    }
+
+    const result = createProject(
+      { name, mission, projectManagerModel, notes },
+      auth.user?.username
+    )
+
+    return NextResponse.json({
+      success: true,
+      slug: result.slug,
+      pmId: result.pmId,
+    }, { status: 201 })
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to create project'
+    logger.error({ err: error }, 'POST /api/brain/projects error')
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

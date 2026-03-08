@@ -20,26 +20,14 @@ interface NavGroup {
 
 const navGroups: NavGroup[] = [
   {
-    id: 'portfolio',
-    label: 'PORTFOLIO',
+    id: 'main',
+    label: undefined,
     items: [
-      { id: 'overview', label: 'Overview', icon: <OverviewIcon />, priority: true },
+      { id: 'sampson', label: 'Sampson', icon: <SampsonIcon />, priority: true },
       { id: 'projects', label: 'Projects', icon: <TasksIcon />, priority: true },
-    ],
-  },
-  {
-    id: 'agents',
-    label: 'AGENTS',
-    items: [
       { id: 'agents', label: 'Agents', icon: <AgentsIcon />, priority: true, requiresGateway: true },
-    ],
-  },
-  {
-    id: 'operate',
-    label: 'OPERATE',
-    items: [
-      { id: 'logs', label: 'Logs', icon: <LogsIcon />, priority: false },
       { id: 'brain', label: 'Brain', icon: <MemoryIcon />, priority: true },
+      { id: 'logs', label: 'Logs', icon: <LogsIcon />, priority: false },
     ],
   },
 ]
@@ -144,7 +132,7 @@ export function NavRail() {
                       <NavButton
                         key={item.id}
                         item={item}
-                        active={activeTab === item.id}
+                        active={activeTab === item.id || (item.id === 'projects' && activeTab.startsWith('projects/'))}
                         expanded={sidebarExpanded}
                         disabled={disabled}
                         onClick={() => { if (!disabled) navigateToPanel(item.id) }}
@@ -255,7 +243,7 @@ function MobileBottomBar({ activeTab, navigateToPanel }: {
               key={item.id}
               onClick={() => navigateToPanel(item.id)}
               className={`flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-lg transition-smooth min-w-[48px] min-h-[48px] ${
-                activeTab === item.id
+                activeTab === item.id || (item.id === 'projects' && activeTab.startsWith('projects/'))
                   ? 'text-primary'
                   : 'text-muted-foreground'
               }`}
@@ -369,7 +357,7 @@ function MobileBottomSheet({ open, onClose, activeTab, navigateToPanel }: {
                       handleClose()
                     }}
                     className={`flex items-center gap-2.5 px-3 min-h-[48px] rounded-xl transition-smooth ${
-                      activeTab === item.id
+                      activeTab === item.id || (item.id === 'projects' && activeTab.startsWith('projects/'))
                         ? 'bg-primary/15 text-primary'
                         : 'text-foreground hover:bg-secondary'
                     }`}
@@ -388,6 +376,16 @@ function MobileBottomSheet({ open, onClose, activeTab, navigateToPanel }: {
 }
 
 // SVG Icons (16x16 viewbox, stroke-based)
+function SampsonIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="8" cy="5" r="3" />
+      <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+      <path d="M8 2v2M8 14v-1M7 3l1-1 1 1M7 7h2" />
+    </svg>
+  )
+}
+
 function OverviewIcon() {
   return (
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">

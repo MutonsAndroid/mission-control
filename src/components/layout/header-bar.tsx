@@ -25,15 +25,18 @@ export function HeaderBar() {
 
   const activeSessions = sessions.filter(s => s.active).length
   const tabLabels: Record<string, string> = {
+    sampson: 'Sampson',
     overview: 'Overview',
-    agents: 'Agent Squad',
+    agents: 'Agents',
+    projects: 'Projects',
+    brain: 'Brain',
+    logs: 'Logs',
     tasks: 'Task Board',
     sessions: 'Sessions',
     documents: 'Documents',
     activity: 'Activity Feed',
     notifications: 'Notifications',
     standup: 'Daily Standup',
-    logs: 'Log Viewer',
     spawn: 'Spawn Agent',
     cron: 'Cron Jobs',
     memory: 'Memory Browser',
@@ -136,7 +139,11 @@ export function HeaderBar() {
       {/* Left: Page title + breadcrumb */}
       <div className="flex items-center gap-3">
         <h1 className="text-sm font-semibold text-foreground">
-          {tabLabels[activeTab] || 'Mission Control'}
+          {tabLabels[activeTab] ||
+            (activeTab === 'projects/create' ? 'Create Project' : null) ||
+            (activeTab.startsWith('projects/') && activeTab.split('/')[1] !== 'create'
+              ? `Project: ${activeTab.split('/')[1]}`
+              : 'Mission Control')}
         </h1>
         <span className="text-2xs text-muted-foreground font-mono-tight">
           v{APP_VERSION}

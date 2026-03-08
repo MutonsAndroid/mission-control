@@ -3,13 +3,16 @@
 import { useRouter } from 'next/navigation'
 import { useCallback } from 'react'
 
-export function panelHref(panel: string): string {
-  return panel === 'overview' ? '/' : `/${panel}`
+export function panelHref(panel: string, slug?: string): string {
+  if (panel === 'sampson' || panel === 'overview') return '/'
+  if (panel === 'project' && slug) return `/projects/${slug}`
+  if (panel === 'projects/create') return '/projects/create'
+  return `/${panel}`
 }
 
 export function useNavigateToPanel() {
   const router = useRouter()
-  return useCallback((panel: string) => {
-    router.push(panelHref(panel))
+  return useCallback((panel: string, slug?: string) => {
+    router.push(panelHref(panel, slug))
   }, [router])
 }

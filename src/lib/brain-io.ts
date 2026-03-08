@@ -9,6 +9,25 @@ import { locateOpenClawInstall } from '@/lib/memory/locate'
 import { logger } from '@/lib/logger'
 
 /**
+ * Read BRAIN/projects/<project>/logs/structure.md.
+ * Returns full content or empty string if file missing.
+ */
+export function readStructureLog(projectSlug: string): string {
+  const paths = locateOpenClawInstall()
+  if (!paths) return ''
+
+  const logFile = path.join(paths.brainProjectsDir, projectSlug, 'logs', 'structure.md')
+  try {
+    if (fs.existsSync(logFile)) {
+      return fs.readFileSync(logFile, 'utf-8')
+    }
+  } catch (err) {
+    logger.warn({ err, projectSlug, logFile }, '[brain-io] Failed to read structure log')
+  }
+  return ''
+}
+
+/**
  * Append an entry to BRAIN/projects/<project>/logs/structure.md.
  * Used for agent creation logging per governance.
  */

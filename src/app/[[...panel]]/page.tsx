@@ -6,10 +6,13 @@ import { NavRail } from '@/components/layout/nav-rail'
 import { HeaderBar } from '@/components/layout/header-bar'
 import { LiveFeed } from '@/components/layout/live-feed'
 import { Dashboard } from '@/components/dashboard/dashboard'
+import { SampsonConsole } from '@/components/panels/sampson-console'
 import { AgentSpawnPanel } from '@/components/panels/agent-spawn-panel'
 import { LogViewerPanel } from '@/components/panels/log-viewer-panel'
 import { BrainPanel } from '@/components/panels/brain-panel'
 import { ProjectTasksPanel } from '@/components/panels/project-tasks-panel'
+import { ProjectCreationPanel } from '@/components/panels/project-creation-panel'
+import { ProjectCommandCenter } from '@/components/panels/project-command-center'
 import { AgentSquadPanelPhase3 } from '@/components/panels/agent-squad-panel-phase3'
 import { AgentCommsPanel } from '@/components/panels/agent-comms-panel'
 import { StandupPanel } from '@/components/panels/standup-panel'
@@ -33,7 +36,7 @@ export default function Home() {
 
   // Sync URL → Zustand activeTab
   const pathname = usePathname()
-  const panelFromUrl = pathname === '/' ? 'overview' : pathname.slice(1)
+  const panelFromUrl = pathname === '/' ? 'sampson' : pathname.slice(1).replace(/^\//, '')
 
   useEffect(() => {
     setActiveTab(panelFromUrl)
@@ -183,7 +186,20 @@ function ContentRouter({ tab }: { tab: string }) {
   const { dashboardMode } = useMissionControl()
   const isLocal = dashboardMode === 'local'
 
+  // projects/<slug> -> Project Command Center
+  if (tab.startsWith('projects/')) {
+    const parts = tab.split('/')
+    if (parts[1] === 'create') {
+      return <ProjectCreationPanel />
+    }
+    if (parts[1] && /^[a-z0-9-_]+$/.test(parts[1])) {
+      return <ProjectCommandCenter slug={parts[1]} />
+    }
+  }
+
   switch (tab) {
+    case 'sampson':
+      return <SampsonConsole />
     case 'overview':
       return (
         <>
@@ -196,7 +212,6 @@ function ContentRouter({ tab }: { tab: string }) {
         </>
       )
     case 'tasks':
-      return <ProjectTasksPanel />
     case 'projects':
       return <ProjectTasksPanel />
     case 'agents':

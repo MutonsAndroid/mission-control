@@ -23,6 +23,10 @@ export interface OpenClawPaths {
   brainSummariesDir: string
   brainCapabilitiesDir: string
   portfolio: string
+  portfolioSummariesDaily: string
+  portfolioEscalations: string
+  portfolioExpansionRequests: string
+  portfolioRecentReports: string
   summariesDaily: string
   working: string
   semanticIndex: string
@@ -89,6 +93,10 @@ function buildPaths(root: string, workspace: string): OpenClawPaths {
     brainSummariesDir: path.join(brain, 'summaries'),
     brainCapabilitiesDir: path.join(brain, 'capabilities'),
     portfolio,
+    portfolioSummariesDaily: path.join(portfolio, 'summaries', 'daily'),
+    portfolioEscalations: path.join(portfolio, 'escalations.md'),
+    portfolioExpansionRequests: path.join(portfolio, 'expansion-requests.md'),
+    portfolioRecentReports: path.join(portfolio, 'recent-reports.md'),
     summariesDaily: path.join(brain, 'summaries', 'daily'),
     working: path.join(brain, 'working'),
     semanticIndex: path.join(portfolio, 'semantic-index'),

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { createClientLogger } from '@/lib/client-logger'
+import { useNavigateToPanel } from '@/lib/navigation'
 
 const log = createClientLogger('ProjectTasksPanel')
 
@@ -21,6 +22,7 @@ interface ParsedTask {
 }
 
 export function ProjectTasksPanel() {
+  const navigateToPanel = useNavigateToPanel()
   const [projects, setProjects] = useState<BrainProject[]>([])
   const [selectedProject, setSelectedProject] = useState<string | null>(null)
   const [tasks, setTasks] = useState<ParsedTask[]>([])
@@ -134,11 +136,19 @@ export function ProjectTasksPanel() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="border-b border-border pb-4">
-        <h1 className="text-3xl font-bold text-foreground">Projects</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage project tasks from BRAIN/projects/&lt;project&gt;/TASKS.md
-        </p>
+      <div className="border-b border-border pb-4 flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-foreground">Projects</h1>
+          <p className="text-muted-foreground mt-2">
+            Manage project tasks from BRAIN/projects/&lt;project&gt;/TASKS.md
+          </p>
+        </div>
+        <button
+          onClick={() => navigateToPanel('projects/create')}
+          className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 font-medium"
+        >
+          Create Project
+        </button>
       </div>
 
       {loading ? (

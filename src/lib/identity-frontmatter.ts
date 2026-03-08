@@ -1,6 +1,7 @@
 /**
  * Parse IDENTITY.md front-matter for project binding and hierarchy.
- * Safeguards: project (required for isolation), reports_to (for hierarchy fallback).
+ * Required fields: project, reports_to (except for Sampson), authority_level.
+ * Source of truth for hierarchy is agents/hierarchy.json; this validates IDENTITY.md consistency.
  */
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/
@@ -8,11 +9,12 @@ const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/
 export interface IdentityFrontmatter {
   project?: string
   reports_to?: string
+  authority_level?: string
 }
 
 /**
  * Extract YAML front-matter from Markdown content.
- * Returns { project, reports_to } or empty object if missing/parse error.
+ * Returns { project, reports_to, authority_level } or empty object if missing/parse error.
  */
 export function parseIdentityFrontmatter(content: string): IdentityFrontmatter {
   if (!content || typeof content !== 'string') return {}
@@ -30,7 +32,24 @@ export function parseIdentityFrontmatter(content: string): IdentityFrontmatter {
     const value = line.slice(colon + 1).trim().replace(/^['"]|['"]$/g, '')
     if (key === 'project') result.project = value
     if (key === 'reports_to') result.reports_to = value
+    if (key === 'authority_level') result.authority_level = value
   }
 
   return result
+}
+
+/**
+ * Validate required IDENTITY.md fields for non-Sampson agents.
+ * Sampson (project: "portfolio") may omit reports_to.
+ * Returns { valid: boolean, missing: string[] }.
+ */
+export function validateIdentityFrontmatter(fm: IdentityFrontmatter, agentId: string): { valid: boolean; missing: string[] } {
+  const missing: string[] = []
+  if (!fm.project || !fm.project.trim()) missing.push('project')
+  if (!fm.authority_level || !fm.authority_level.trim()) missing.push('authority_level')
+  // reports_to required for all agents except Sampson (project: "portfolio")
+  if (fm.project !== 'portfolio' && (!fm.reports_to || !fm.reports_to.trim())) {
+    missing.push('reports_to')
+  }
+  return { valid: missing.length === 0, missing }
 }

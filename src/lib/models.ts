@@ -6,6 +6,13 @@ export interface ModelConfig {
   costPer1k: number
 }
 
+/** OpenAI-native primary catalog for agent/project creation (OpenClaw ecosystem) */
+export const OPENAI_MODELS: ModelConfig[] = [
+  { alias: 'gpt-5', name: 'openai/gpt-5', provider: 'openai', description: 'Flagship', costPer1k: 5.0 },
+  { alias: 'gpt-5-mini', name: 'openai/gpt-5-mini', provider: 'openai', description: 'Fast, cost-effective', costPer1k: 0.5 },
+  { alias: 'gpt-5-thinking', name: 'openai/gpt-5-thinking', provider: 'openai', description: 'Extended reasoning', costPer1k: 8.0 },
+]
+
 export const MODEL_CATALOG: ModelConfig[] = [
   { alias: 'haiku', name: 'anthropic/claude-3-5-haiku-latest', provider: 'anthropic', description: 'Ultra-cheap, simple tasks', costPer1k: 0.25 },
   { alias: 'sonnet', name: 'anthropic/claude-sonnet-4-20250514', provider: 'anthropic', description: 'Standard workhorse', costPer1k: 3.0 },
