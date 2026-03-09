@@ -4,6 +4,8 @@ import { getAgentDocsFromDb } from '@/lib/agent-sync';
 import { eventBus } from '@/lib/event-bus';
 import { getTemplate, buildAgentConfig } from '@/lib/agent-templates';
 import { writeAgentToConfig, enrichAgentConfigFromWorkspace } from '@/lib/agent-sync';
+import { ensureAgentIdentityAndSoul } from '@/lib/agent-docs';
+import { enrichAgentWithIdentity } from '@/lib/agent-enrichment';
 import { logAuditEvent } from '@/lib/db';
 import { requireRole } from '@/lib/auth';
 import { mutationLimiter } from '@/lib/rate-limit';
@@ -77,8 +79,7 @@ export async function GET(request: NextRequest) {
     const agentsWithStats = agentsWithParsedData.map(agent => {
       const taskStats = taskCountStmt.get(agent.name, workspaceId) as any;
       const docs = docsMap[agent.id] || {};
-
-      return {
+      const base = {
         ...agent,
         docs: Object.keys(docs).length > 0 ? docs : undefined,
         taskStats: {
@@ -88,6 +89,7 @@ export async function GET(request: NextRequest) {
           completed: taskStats.completed || 0
         }
       };
+      return enrichAgentWithIdentity(base) as typeof base;
     });
     
     // Get total count for pagination
@@ -251,6 +253,27 @@ export async function POST(request: NextRequest) {
       workspaceId
     );
     
+    // Ensure IDENTITY.md and SOUL.md exist (mandatory for every agent).
+    // When project provided, appends to BRAIN structure log for audit.
+    try {
+      ensureAgentIdentityAndSoul(
+        openclawId,
+        name,
+        finalRole,
+        structure_log_purpose || 'Created via Mission Control',
+        project && /^[a-z0-9-_]+$/.test(project)
+          ? {
+              project,
+              purpose: structure_log_purpose || 'Created via Mission Control',
+              authorizedBy: auth.user.username,
+              hierarchy: { project },
+            }
+          : undefined
+      );
+    } catch (ensureErr: any) {
+      logger.warn({ err: ensureErr, agentId: openclawId }, 'Failed to ensure IDENTITY.md/SOUL.md');
+    }
+
     // Fetch the created agent
     const createdAgent = db
       .prepare('SELECT * FROM agents WHERE id = ? AND workspace_id = ?')
@@ -260,21 +283,10 @@ export async function POST(request: NextRequest) {
       config: JSON.parse(createdAgent.config || '{}'),
       taskStats: { total: 0, assigned: 0, in_progress: 0, completed: 0 }
     };
+    const enrichedAgent = enrichAgentWithIdentity(parsedAgent) as typeof parsedAgent;
 
     // Broadcast to SSE clients
-    eventBus.broadcast('agent.created', parsedAgent);
-
-    // Append to BRAIN structure log when project is provided (Sampson ecosystem)
-    if (project && typeof project === 'string' && /^[a-z0-9-_]+$/.test(project)) {
-      try {
-        const { appendStructureLog } = await import('@/lib/brain-io');
-        const purpose = structure_log_purpose || 'Created via Mission Control';
-        const entry = `Created ${name}\nPurpose: ${purpose}\nAuthorized by: ${auth.user.username}`;
-        appendStructureLog(project, entry);
-      } catch (structureErr) {
-        logger.warn({ err: structureErr, project, name }, 'Failed to append structure log');
-      }
-    }
+    eventBus.broadcast('agent.created', enrichedAgent);
 
     // Write to gateway config if requested
     if (write_to_gateway && finalConfig) {
@@ -303,13 +315,13 @@ export async function POST(request: NextRequest) {
       } catch (gwErr: any) {
         logger.error({ err: gwErr }, 'Gateway write-back failed');
         return NextResponse.json({ 
-          agent: parsedAgent,
+          agent: enrichedAgent,
           warning: `Agent created in MC but gateway write failed: ${gwErr.message}`
         }, { status: 201 });
       }
     }
 
-    return NextResponse.json({ agent: parsedAgent }, { status: 201 });
+    return NextResponse.json({ agent: enrichedAgent }, { status: 201 });
   } catch (error) {
     logger.error({ err: error }, 'POST /api/agents error');
     return NextResponse.json({ error: 'Failed to create agent' }, { status: 500 });

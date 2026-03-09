@@ -7,6 +7,8 @@ import { resolveWithin } from '@/lib/paths';
 import { requireRole } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { getCanonicalSoul, getBootPaths } from '@/lib/mission-control-boot';
+import { loadAgentSoul } from '@/lib/agent-soul-loader';
+import { getSoulWritePath } from '@/lib/agent-docs';
 
 function resolveAgentWorkspacePath(workspace: string): string {
   if (isAbsolute(workspace)) return resolve(workspace)
@@ -58,6 +60,17 @@ export async function GET(
       }
     } catch (err) {
       logger.warn({ err, agent: agent.name }, 'Failed to read soul.md from workspace')
+    }
+
+    // Try agents/<agent-id>/SOUL.md (canonical location)
+    if (!soulContent) {
+      const agentConfig = agent.config ? JSON.parse(agent.config) : {}
+      const fsId = agentConfig.openclawId || agent.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+      const agentSoul = loadAgentSoul(fsId, agent.name)
+      if (agentSoul) {
+        soulContent = agentSoul
+        source = 'workspace'
+      }
     }
 
     // Fall back to database value
@@ -175,19 +188,30 @@ export async function PUT(
     
     const now = Math.floor(Date.now() / 1000);
 
-    // Write to workspace file if available
+    // Write to canonical agents/<id>/SOUL.md first, then workspace as fallback
+    const agentConfig = agent.config ? JSON.parse(agent.config) : {}
+    const fsId = agentConfig.openclawId || agent.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
     let savedToWorkspace = false
     try {
-      const agentConfig = agent.config ? JSON.parse(agent.config) : {}
-      if (agentConfig.workspace) {
+      const soulWritePath = getSoulWritePath(fsId, agent.name)
+      if (soulWritePath) {
+        mkdirSync(dirname(soulWritePath), { recursive: true })
+        writeFileSync(soulWritePath, newSoulContent || '', 'utf-8')
+        savedToWorkspace = true
+      }
+    } catch (err) {
+      logger.warn({ err, agent: agent.name }, 'Failed to write SOUL.md to agents dir')
+    }
+    if (!savedToWorkspace && agentConfig.workspace) {
+      try {
         const safeWorkspace = resolveAgentWorkspacePath(agentConfig.workspace)
         const safeSoulPath = resolveWithin(safeWorkspace, 'soul.md')
         mkdirSync(dirname(safeSoulPath), { recursive: true })
         writeFileSync(safeSoulPath, newSoulContent || '', 'utf-8')
         savedToWorkspace = true
+      } catch (err) {
+        logger.warn({ err, agent: agent.name }, 'Failed to write soul.md to workspace')
       }
-    } catch (err) {
-      logger.warn({ err, agent: agent.name }, 'Failed to write soul.md to workspace, saving to DB only')
     }
 
     // Update SOUL content in DB

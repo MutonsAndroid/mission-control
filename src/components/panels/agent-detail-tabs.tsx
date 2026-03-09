@@ -221,6 +221,55 @@ export function OverviewTab({
         )}
       </div>
 
+      {/* Identity (from IDENTITY.md when available) */}
+      {((agent as any).identity) && (
+        <div className="space-y-4 p-4 bg-surface-1/50 rounded-lg">
+          <h4 className="text-sm font-medium text-foreground">Identity (IDENTITY.md)</h4>
+          <div className="grid gap-3 text-sm">
+            {(agent as any).identity.name && (
+              <div>
+                <label className="block text-xs text-muted-foreground mb-0.5">Name</label>
+                <p className="text-foreground">{(agent as any).identity.name}</p>
+              </div>
+            )}
+            {(agent as any).identity.role && (
+              <div>
+                <label className="block text-xs text-muted-foreground mb-0.5">Role</label>
+                <p className="text-foreground">{(agent as any).identity.role}</p>
+              </div>
+            )}
+            {(agent as any).identity.purpose && (
+              <div>
+                <label className="block text-xs text-muted-foreground mb-0.5">Purpose</label>
+                <p className="text-foreground">{(agent as any).identity.purpose}</p>
+              </div>
+            )}
+            {(agent as any).identity.owner && (
+              <div>
+                <label className="block text-xs text-muted-foreground mb-0.5">Owner</label>
+                <p className="text-foreground">{(agent as any).identity.owner}</p>
+              </div>
+            )}
+            {(agent as any).identity.tone && (
+              <div>
+                <label className="block text-xs text-muted-foreground mb-0.5">Personality Tone</label>
+                <p className="text-foreground">{(agent as any).identity.tone}</p>
+              </div>
+            )}
+            {((agent as any).identity.responsibilities?.length ?? 0) > 0 && (
+              <div>
+                <label className="block text-xs text-muted-foreground mb-1">Responsibilities</label>
+                <ul className="list-disc list-inside text-foreground space-y-0.5">
+                  {((agent as any).identity.responsibilities || []).map((r: string, i: number) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Agent Details */}
       <div className="space-y-4">
         <div>
@@ -475,7 +524,7 @@ export function SoulTab({
 
 // Identity Tab - structured form editor for IDENTITY.md
 export function IdentityTab({ agent }: { agent: Agent }) {
-  const agentId = agent.name.toLowerCase().replace(/\s+/g, '-')
+  const agentId = (agent as any).agentId ?? agent.name.toLowerCase().replace(/\s+/g, '-')
   return (
     <div className="p-6">
       <IdentityEditor
@@ -499,7 +548,7 @@ export function MemoryTab({
   const [memoryTree, setMemoryTree] = useState<any[]>([])
 
   useEffect(() => {
-    const agentId = agent.name.toLowerCase().replace(/\s+/g, '-')
+    const agentId = (agent as any).agentId ?? agent.name.toLowerCase().replace(/\s+/g, '-')
     fetch(`/api/brain/agents/${encodeURIComponent(agentId)}`)
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
@@ -573,7 +622,7 @@ export function TasksTab({ agent }: { agent: Agent }) {
   const [project, setProject] = useState<string | null>(null)
 
   useEffect(() => {
-    const agentId = agent.name.toLowerCase().replace(/\s+/g, '-')
+    const agentId = (agent as any).agentId ?? agent.name.toLowerCase().replace(/\s+/g, '-')
     fetch(`/api/brain/agents/${encodeURIComponent(agentId)}`)
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {
@@ -658,7 +707,7 @@ export function LogsTab({ agent }: { agent: Agent }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const agentId = agent.name.toLowerCase().replace(/\s+/g, '-')
+    const agentId = (agent as any).agentId ?? agent.name.toLowerCase().replace(/\s+/g, '-')
     fetch(`/api/brain/agents/${encodeURIComponent(agentId)}`)
       .then((res) => res.ok ? res.json() : null)
       .then((data) => {

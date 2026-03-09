@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDatabase, db_helpers, logAuditEvent } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 import { getAgentDocsFromDb } from '@/lib/agent-sync'
+import { enrichAgentWithIdentity } from '@/lib/agent-enrichment'
 import { writeAgentToConfig, enrichAgentConfigFromWorkspace } from '@/lib/agent-sync'
 import { eventBus } from '@/lib/event-bus'
 import { logger } from '@/lib/logger'
@@ -35,11 +36,12 @@ export async function GET(
     const docsMap = getAgentDocsFromDb([(agent as any).id])
     const docs = docsMap[(agent as any).id] || {}
 
-    const parsed = {
+    const base = {
       ...(agent as any),
       config: enrichAgentConfigFromWorkspace((agent as any).config ? JSON.parse((agent as any).config) : {}),
       ...(Object.keys(docs).length > 0 ? { docs } : {}),
     }
+    const parsed = enrichAgentWithIdentity(base)
 
     return NextResponse.json({ agent: parsed })
   } catch (error) {

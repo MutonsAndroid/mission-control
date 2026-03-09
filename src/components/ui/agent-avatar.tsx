@@ -2,6 +2,8 @@
 
 interface AgentAvatarProps {
   name: string
+  /** Emoji from IDENTITY.md — when present, displayed instead of initials */
+  emoji?: string
   size?: 'xs' | 'sm' | 'md'
   className?: string
 }
@@ -40,18 +42,29 @@ const sizeClasses: Record<NonNullable<AgentAvatarProps['size']>, string> = {
   md: 'w-8 h-8 text-xs',
 }
 
-export function AgentAvatar({ name, size = 'sm', className = '' }: AgentAvatarProps) {
+const emojiSizeClasses: Record<NonNullable<AgentAvatarProps['size']>, string> = {
+  xs: 'text-base',
+  sm: 'text-lg',
+  md: 'text-xl',
+}
+
+export function AgentAvatar({ name, emoji, size = 'sm', className = '' }: AgentAvatarProps) {
   const initials = getInitials(name)
   const colors = getAvatarColors(name)
+  const showEmoji = emoji && emoji.trim().length > 0
 
   return (
     <div
       className={`rounded-full flex items-center justify-center font-semibold shrink-0 ${sizeClasses[size]} ${className}`}
-      style={colors}
+      style={showEmoji ? {} : colors}
       title={name}
       aria-label={name}
     >
-      {initials}
+      {showEmoji ? (
+        <span className={emojiSizeClasses[size]}>{emoji.trim()}</span>
+      ) : (
+        initials
+      )}
     </div>
   )
 }

@@ -15,7 +15,7 @@ import { resolveWithin } from './paths'
 import { logger } from './logger'
 import { parseJsonRelaxed } from './json-relaxed'
 import { discoverRuntimeAgents, type RuntimeAgent } from './openclaw-runtime'
-import { loadAgentDocs, getAgentDocsDiagnostics } from './agent-docs'
+import { loadAgentDocs, getAgentDocsDiagnostics, ensureAgentIdentityAndSoul } from './agent-docs'
 
 interface OpenClawAgent {
   id: string
@@ -367,6 +367,13 @@ function syncAgentsToDb(agents: OpenClawAgent[], actor: string): SyncResult {
         mcAgentId = insertResult.lastInsertRowid as number
         results.push({ id: agent.id, name: mapped.name, action: 'created' })
         created++
+
+        // Ensure IDENTITY.md and SOUL.md exist (mandatory for every agent)
+        try {
+          ensureAgentIdentityAndSoul(agent.id, mapped.name, mapped.role, undefined)
+        } catch (ensureErr: any) {
+          logger.warn({ err: ensureErr, agentId: agent.id }, 'Failed to ensure IDENTITY.md/SOUL.md during sync')
+        }
       }
 
       // Hydrate agent docs from filesystem (OpenClaw source of truth)

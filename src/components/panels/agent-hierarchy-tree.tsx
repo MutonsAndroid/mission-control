@@ -14,7 +14,7 @@ interface HierarchyData {
   nodeIds: string[]
 }
 
-type AgentLike = { id: number; name: string; role: string; status: string; session_key?: string }
+type AgentLike = { id: number; name: string; role: string; status: string; session_key?: string; avatarEmoji?: string; identity?: { emoji?: string } }
 
 interface AgentHierarchyTreeProps {
   agents: AgentLike[]
@@ -56,7 +56,7 @@ function TreeNode({
           onClick={() => agent && onSelect(agent)}
         >
           {agent ? (
-            <AgentAvatar name={agent.name} size="sm" />
+            <AgentAvatar name={agent.name} emoji={agent.avatarEmoji ?? agent.identity?.emoji} size="sm" />
           ) : (
             <div className="w-6 h-6 rounded-full bg-surface-2 flex items-center justify-center text-xs">
               ?
