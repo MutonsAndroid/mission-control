@@ -22,6 +22,7 @@ import { UserManagementPanel } from '@/components/panels/user-management-panel'
 import { SettingsPanel } from '@/components/panels/settings-panel'
 import { ToolsPanel } from '@/components/panels/tools-panel'
 import { SkillsPanel } from '@/components/panels/skills-panel'
+import { ProtocolsPanel } from '@/components/panels/protocols-panel'
 import { ChatPanel } from '@/components/chat/chat-panel'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { LocalModeBanner } from '@/components/layout/local-mode-banner'
@@ -236,6 +237,8 @@ function ContentRouter({ tab }: { tab: string }) {
       return <LogViewerPanel />
     case 'brain':
       return <BrainPanel />
+    case 'protocols':
+      return <ProtocolsPanel />
     case 'tools':
       return <ToolsPanel />
     case 'skills':

@@ -7,6 +7,7 @@ export function panelHref(panel: string, slug?: string): string {
   if (panel === 'sampson' || panel === 'overview') return '/'
   if (panel === 'project' && slug) return `/projects/${slug}`
   if (panel === 'projects/create') return '/projects/create'
+  if (panel === 'protocols' && slug) return `/protocols?selected=${encodeURIComponent(slug)}`
   return `/${panel}`
 }
 

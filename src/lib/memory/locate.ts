@@ -23,6 +23,7 @@ export interface OpenClawPaths {
   brainSummariesDir: string
   brainCapabilitiesDir: string
   portfolio: string
+  protocolsDir: string
   portfolioSummariesDaily: string
   portfolioEscalations: string
   portfolioExpansionRequests: string
@@ -93,6 +94,7 @@ function buildPaths(root: string, workspace: string): OpenClawPaths {
     brainSummariesDir: path.join(brain, 'summaries'),
     brainCapabilitiesDir: path.join(brain, 'capabilities'),
     portfolio,
+    protocolsDir: path.join(portfolio, 'protocols'),
     portfolioSummariesDaily: path.join(portfolio, 'summaries', 'daily'),
     portfolioEscalations: path.join(portfolio, 'escalations.md'),
     portfolioExpansionRequests: path.join(portfolio, 'expansion-requests.md'),

@@ -11,6 +11,7 @@ import {
   MemoryTab,
   TasksTab,
   LogsTab,
+  ProtocolsTab,
   CreateAgentModal
 } from './agent-detail-tabs'
 import { AgentHierarchyTree } from './agent-hierarchy-tree'
@@ -562,7 +563,7 @@ function AgentDetailModalPhase3({
     setAgent(prev => (initialAgent.updated_at != null && (prev.updated_at == null || initialAgent.updated_at >= prev.updated_at)) ? initialAgent : prev)
   }, [initialAgent, initialAgent.updated_at])
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'identity' | 'soul' | 'memory' | 'tasks' | 'logs'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'identity' | 'soul' | 'protocols' | 'memory' | 'tasks' | 'logs'>('overview')
   const [editing, setEditing] = useState(false)
   const [formData, setFormData] = useState({
     role: initialAgent.role,
@@ -690,6 +691,7 @@ function AgentDetailModalPhase3({
     { id: 'overview', label: 'Overview', icon: 'O' },
     { id: 'identity', label: 'Identity', icon: 'I' },
     { id: 'soul', label: 'Soul', icon: 'S' },
+    { id: 'protocols', label: 'Protocols', icon: 'P' },
     { id: 'memory', label: 'Memory', icon: 'M' },
     { id: 'tasks', label: 'Tasks', icon: 'T' },
     { id: 'logs', label: 'Logs', icon: 'L' }
@@ -746,7 +748,7 @@ function AgentDetailModalPhase3({
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => { setActiveTab(tab.id as any); setTabError(null) }}
+                onClick={() => { setActiveTab(tab.id as 'overview' | 'identity' | 'soul' | 'protocols' | 'memory' | 'tasks' | 'logs'); setTabError(null) }}
                 className={`px-3.5 py-2 text-sm rounded-md border flex items-center gap-2 transition-smooth whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'bg-primary/90 text-primary-foreground border-primary/60 shadow-[0_0_0_1px_rgba(56,189,248,0.25)]'
@@ -794,6 +796,9 @@ function AgentDetailModalPhase3({
               templates={soulTemplates}
               onSave={handleSoulSave}
             />
+          )}
+          {activeTab === 'protocols' && (
+            <ProtocolsTab agent={agent} />
           )}
           {activeTab === 'memory' && (
             <MemoryTab agent={agent} />

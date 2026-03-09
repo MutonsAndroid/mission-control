@@ -27,6 +27,7 @@ const navGroups: NavGroup[] = [
       { id: 'projects', label: 'Projects', icon: <TasksIcon />, priority: true },
       { id: 'agents', label: 'Agents', icon: <AgentsIcon />, priority: true, requiresGateway: true },
       { id: 'brain', label: 'Brain', icon: <MemoryIcon />, priority: true },
+      { id: 'protocols', label: 'Protocols', icon: <ProtocolsIcon />, priority: false },
       { id: 'logs', label: 'Logs', icon: <LogsIcon />, priority: false },
       { id: 'skills', label: 'Skills', icon: <SkillsIcon />, priority: false },
       { id: 'tools', label: 'Tools', icon: <ToolsIcon />, priority: false },
@@ -135,7 +136,7 @@ export function NavRail() {
                       <NavButton
                         key={item.id}
                         item={item}
-                        active={activeTab === item.id || (item.id === 'projects' && activeTab.startsWith('projects/'))}
+                        active={activeTab === item.id || (item.id === 'projects' && activeTab.startsWith('projects/')) || (item.id === 'protocols' && activeTab.startsWith('protocols'))}
                         expanded={sidebarExpanded}
                         disabled={disabled}
                         onClick={() => { if (!disabled) navigateToPanel(item.id) }}
@@ -246,7 +247,7 @@ function MobileBottomBar({ activeTab, navigateToPanel }: {
               key={item.id}
               onClick={() => navigateToPanel(item.id)}
               className={`flex flex-col items-center justify-center gap-0.5 px-2 py-2 rounded-lg transition-smooth min-w-[48px] min-h-[48px] ${
-                activeTab === item.id || (item.id === 'projects' && activeTab.startsWith('projects/'))
+                activeTab === item.id || (item.id === 'projects' && activeTab.startsWith('projects/')) || (item.id === 'protocols' && activeTab.startsWith('protocols'))
                   ? 'text-primary'
                   : 'text-muted-foreground'
               }`}
@@ -360,7 +361,7 @@ function MobileBottomSheet({ open, onClose, activeTab, navigateToPanel }: {
                       handleClose()
                     }}
                     className={`flex items-center gap-2.5 px-3 min-h-[48px] rounded-xl transition-smooth ${
-                      activeTab === item.id || (item.id === 'projects' && activeTab.startsWith('projects/'))
+                      activeTab === item.id || (item.id === 'projects' && activeTab.startsWith('projects/')) || (item.id === 'protocols' && activeTab.startsWith('protocols'))
                         ? 'bg-primary/15 text-primary'
                         : 'text-foreground hover:bg-secondary'
                     }`}
@@ -638,6 +639,16 @@ function DocumentsIcon() {
       <path d="M3 1.5h7l3 3V14a1 1 0 01-1 1H3a1 1 0 01-1-1V2.5a1 1 0 011-1z" />
       <path d="M10 1.5V5h3" />
       <path d="M5 8h6M5 10.5h6M5 13h4" />
+    </svg>
+  )
+}
+
+function ProtocolsIcon() {
+  return (
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 3h12a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V4a1 1 0 011-1z" />
+      <path d="M4 6h8M4 8h6M4 10h4" />
+      <path d="M6 2v2M10 2v2" />
     </svg>
   )
 }

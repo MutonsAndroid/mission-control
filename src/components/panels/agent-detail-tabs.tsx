@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { createClientLogger } from '@/lib/client-logger'
 import Link from 'next/link'
 import { IdentityEditor } from '@/components/agent/identity-editor'
+import { AgentProtocolsTab } from '@/components/agent/agent-protocols-tab'
 
 const log = createClientLogger('AgentDetailTabs')
 
@@ -533,6 +534,12 @@ export function IdentityTab({ agent }: { agent: Agent }) {
       />
     </div>
   )
+}
+
+// Protocols Tab - assigned protocol documents
+export function ProtocolsTab({ agent }: { agent: Agent }) {
+  const agentId = (agent as any).agentId ?? agent.name.toLowerCase().replace(/\s+/g, '-')
+  return <AgentProtocolsTab agentId={agentId} agentName={agent.name} />
 }
 
 // Memory Tab - BRAIN content scoped by agent's project
