@@ -4,6 +4,8 @@
  * Also handles YAML front-matter for compatibility with existing files.
  */
 
+import { extractFrontmatter } from './markdown-frontmatter'
+
 export interface ParsedIdentity {
   name: string
   role: string
@@ -26,9 +28,6 @@ const EMPTY: ParsedIdentity = {
 
 /** Match list items like "- **Name:** value" or "- **Personality Tone:** value" */
 const KV_RE = /^-\s*\*\*([^*]+):\*\*\s*(.*)$/
-/** Match YAML front-matter key: value */
-const YAML_KV_RE = /^(\w[\w_]*):\s*(.*)$/
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/
 
 const KEY_ALIASES: Record<string, keyof ParsedIdentity> = {
   name: 'name',
@@ -106,21 +105,16 @@ function parseFirstHeading(lines: string[], obj: ParsedIdentity): void {
 }
 
 /**
- * Parse YAML front-matter and map to our schema.
+ * Map frontmatter object to ParsedIdentity fields.
  */
-function parseFrontmatter(yaml: string, obj: ParsedIdentity): void {
-  for (const line of yaml.split(/\r?\n/)) {
-    const colon = line.indexOf(':')
-    if (colon < 0) continue
-    const key = line.slice(0, colon).trim()
-    const value = line.slice(colon + 1).trim().replace(/^['"]|['"]$/g, '')
-    if (key === 'name') obj.name = value
-    else if (key === 'role') obj.role = value
-    else if (key === 'owner') obj.owner = value
-    else if (key === 'purpose') obj.purpose = value
-    else if (key === 'tone' || key === 'personality_tone') obj.tone = value
-    else if (key === 'emoji') obj.emoji = value
-  }
+function applyFrontmatter(fm: Record<string, string>, obj: ParsedIdentity): void {
+  const v = (k: string) => fm[k]
+  if (v('name')) obj.name = v('name')!
+  if (v('role')) obj.role = v('role')!
+  if (v('owner')) obj.owner = v('owner')!
+  if (v('purpose')) obj.purpose = v('purpose')!
+  if (v('tone') || v('personality_tone')) obj.tone = v('tone') || v('personality_tone') || ''
+  if (v('emoji')) obj.emoji = v('emoji')!
 }
 
 /**
@@ -154,15 +148,10 @@ export function parseIdentityMarkdown(markdown: string | null | undefined): Pars
   if (!markdown || typeof markdown !== 'string') return { ...EMPTY }
 
   const result: ParsedIdentity = { ...EMPTY }
+  const { frontmatter, body } = extractFrontmatter(markdown)
+  applyFrontmatter(frontmatter, result)
+  const bodyLines = body.split(/\r?\n/)
   const lines = markdown.split(/\r?\n/)
-
-  // Try front-matter first
-  const fmMatch = markdown.match(FRONTMATTER_RE)
-  let bodyLines = lines
-  if (fmMatch) {
-    parseFrontmatter(fmMatch[1], result)
-    bodyLines = fmMatch[2].split(/\r?\n/)
-  }
 
   // Parse list-format key-values from body
   parseListFormat(bodyLines, result)

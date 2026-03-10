@@ -51,25 +51,20 @@ export interface ProtocolFile {
   meta?: ProtocolMeta
 }
 
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n/
+const PROTOCOL_META_KEYS = ['title', 'purpose', 'scope', 'owner', 'status'] as const
 
 /**
  * Parse YAML-like frontmatter for protocol metadata (title, purpose, scope, owner, status).
  */
 export function parseProtocolMetadata(content: string): ProtocolMeta {
-  const match = content.match(FRONTMATTER_RE)
-  if (!match) return {}
-  const block = match[1]
+  const { frontmatter } = extractFrontmatter(content)
   const meta: ProtocolMeta = {}
-  for (const line of block.split('\n')) {
-    const m = line.match(/^\s*([a-z]+):\s*(.*)$/i)
-    if (m) {
-      const key = m[1].toLowerCase()
-      const val = (m[2] || '').trim().replace(/^["']|["']$/g, '')
-      if (['title', 'purpose', 'scope', 'owner', 'status'].includes(key)) {
-        ;(meta as Record<string, string>)[key] = val
-      }
-    }
+  const lower = Object.fromEntries(
+    Object.entries(frontmatter).map(([k, v]) => [k.toLowerCase(), v])
+  )
+  for (const k of PROTOCOL_META_KEYS) {
+    const v = lower[k]
+    if (v !== undefined) (meta as Record<string, string>)[k] = v
   }
   return meta
 }

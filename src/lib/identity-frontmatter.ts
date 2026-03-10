@@ -4,7 +4,7 @@
  * Source of truth for hierarchy is agents/hierarchy.json; this validates IDENTITY.md consistency.
  */
 
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/
+import { extractFrontmatter } from './markdown-frontmatter'
 
 export interface IdentityFrontmatter {
   project?: string
@@ -12,29 +12,19 @@ export interface IdentityFrontmatter {
   authority_level?: string
 }
 
+const IDENTITY_KEYS = ['project', 'reports_to', 'authority_level'] as const
+
 /**
  * Extract YAML front-matter from Markdown content.
  * Returns { project, reports_to, authority_level } or empty object if missing/parse error.
  */
 export function parseIdentityFrontmatter(content: string): IdentityFrontmatter {
-  if (!content || typeof content !== 'string') return {}
-
-  const m = content.match(FRONTMATTER_RE)
-  if (!m) return {}
-
-  const yaml = m[1]
+  const { frontmatter } = extractFrontmatter(content)
   const result: IdentityFrontmatter = {}
-
-  for (const line of yaml.split(/\r?\n/)) {
-    const colon = line.indexOf(':')
-    if (colon < 0) continue
-    const key = line.slice(0, colon).trim()
-    const value = line.slice(colon + 1).trim().replace(/^['"]|['"]$/g, '')
-    if (key === 'project') result.project = value
-    if (key === 'reports_to') result.reports_to = value
-    if (key === 'authority_level') result.authority_level = value
+  for (const k of IDENTITY_KEYS) {
+    const v = frontmatter[k]
+    if (v !== undefined) (result as Record<string, string>)[k] = v
   }
-
   return result
 }
 

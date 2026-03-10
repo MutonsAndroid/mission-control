@@ -67,6 +67,10 @@ export interface SyncDiff {
   onlyInMC: string[]
 }
 
+/**
+ * Legacy format: parses workspace identity.md (not canonical agents/<id>/IDENTITY.md).
+ * Uses # heading, theme:, emoji: lines for OpenClaw workspace identity.
+ */
 function parseIdentityFromFile(content: string): { name?: string; theme?: string; emoji?: string; content?: string } {
   if (!content.trim()) return {}
   const lines = content.split('\n').map((line) => line.trim()).filter(Boolean)
