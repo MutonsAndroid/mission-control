@@ -3,7 +3,7 @@ import { requireRole } from '@/lib/auth'
 import { readLimiter, mutationLimiter } from '@/lib/rate-limit'
 import {
   listProtocols,
-  createProtocol,
+  uploadProtocol,
   getProtocolsDir,
 } from '@/lib/protocols'
 
@@ -34,7 +34,28 @@ export async function POST(request: NextRequest) {
   const rateCheck = mutationLimiter(request)
   if (rateCheck) return rateCheck
 
+  const contentType = request.headers.get('content-type') ?? ''
+  const isMultipart = contentType.includes('multipart/form-data')
+
   try {
+    if (isMultipart) {
+      const formData = await request.formData()
+      const file = formData.get('file')
+      if (!file || typeof file === 'string') {
+        return NextResponse.json({ error: 'file is required (Markdown .md)' }, { status: 400 })
+      }
+      const name = (file as File).name?.trim() ?? ''
+      if (!name.endsWith('.md')) {
+        return NextResponse.json({ error: 'Only .md files are accepted' }, { status: 400 })
+      }
+      const content = await (file as File).text()
+      const ok = uploadProtocol(name, content)
+      if (!ok) {
+        return NextResponse.json({ error: 'Failed to save protocol' }, { status: 500 })
+      }
+      return NextResponse.json({ success: true, name })
+    }
+
     const body = await request.json()
     const { filename, content } = body
 
@@ -47,13 +68,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Filename must end with .md' }, { status: 400 })
     }
 
-    const ok = createProtocol(name, typeof content === 'string' ? content : '')
+    const ok = uploadProtocol(name, typeof content === 'string' ? content : '')
     if (!ok) {
-      return NextResponse.json({ error: 'Failed to create protocol (file may already exist)' }, { status: 409 })
+      return NextResponse.json({ error: 'Failed to save protocol' }, { status: 500 })
     }
 
     return NextResponse.json({ success: true, name })
   } catch (error) {
-    return NextResponse.json({ error: 'Failed to create protocol' }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to upload/create protocol' }, { status: 500 })
   }
 }

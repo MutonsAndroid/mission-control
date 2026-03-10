@@ -41,6 +41,7 @@ export function ProtocolsPanel() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const navigateToPanel = useNavigateToPanel()
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [protocols, setProtocols] = useState<ProtocolFile[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<string | null>(null)
@@ -51,9 +52,9 @@ export function ProtocolsPanel() {
   const [editedContent, setEditedContent] = useState('')
   const [saving, setSaving] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [createName, setCreateName] = useState('')
+  const [dragActive, setDragActive] = useState(false)
 
   const loadProtocols = useCallback(async () => {
     setLoading(true)
@@ -155,31 +156,56 @@ export function ProtocolsPanel() {
 
   const selectProtocol = (name: string) => loadProtocol(name, true)
 
-  const createProtocol = async () => {
-    const name = createName.trim()
-    if (!name.endsWith('.md')) {
-      alert('Filename must end with .md')
-      return
-    }
-    try {
-      const res = await fetch('/api/protocols', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filename: name, content: '' }),
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setShowCreateModal(false)
-        setCreateName('')
-        loadProtocols()
-        loadProtocol(name, true)
-      } else {
-        alert(data.error || 'Failed to create')
+  const uploadFile = useCallback(
+    async (file: File) => {
+      if (!file.name.endsWith('.md')) {
+        alert('Only .md files are accepted')
+        return
       }
-    } catch {
-      alert('Failed to create')
-    }
+      setUploading(true)
+      try {
+        const formData = new FormData()
+        formData.append('file', file)
+        const res = await fetch('/api/protocols', {
+          method: 'POST',
+          body: formData,
+        })
+        const data = await res.json()
+        if (res.ok) {
+          await loadProtocols()
+          loadProtocol(data.name, true)
+        } else {
+          alert(data.error || 'Failed to upload')
+        }
+      } catch {
+        alert('Failed to upload')
+      } finally {
+        setUploading(false)
+      }
+    },
+    [loadProtocols, loadProtocol]
+  )
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) uploadFile(file)
+    e.target.value = ''
   }
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault()
+      setDragActive(false)
+      const file = e.dataTransfer.files?.[0]
+      if (file) uploadFile(file)
+    },
+    [uploadFile]
+  )
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    setDragActive(true)
+  }
+  const handleDragLeave = () => setDragActive(false)
 
   const deleteProtocol = async () => {
     if (!selected) return
@@ -228,38 +254,76 @@ export function ProtocolsPanel() {
       <div className="border-b border-border pb-4">
         <h1 className="text-3xl font-bold text-foreground">Protocols</h1>
         <p className="text-muted-foreground mt-2">
-          Operational protocols as Markdown documents. Assign protocols to agents for governance and consistency.
+          Operational protocols as Markdown documents. Upload .md files or assign protocols to agents for governance.
         </p>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        <div className="bg-card border border-border rounded-lg p-4">
-          <div className="flex gap-2 mb-4">
+        {/* Left column: search, Upload Markdown, list — all inside same padded container */}
+        <div className="bg-card border border-border rounded-lg p-4 flex flex-col">
+          <div className="space-y-3 px-1">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search protocols..."
-              className="flex-1 px-3 py-2 border border-border rounded-md bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm"
+              className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 text-sm"
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".md"
+              onChange={handleFileChange}
+              className="hidden"
             />
             <button
-              onClick={() => setShowCreateModal(true)}
-              className="px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90 transition-smooth"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="w-full px-3 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90 disabled:opacity-50 transition-smooth font-medium"
             >
-              New
+              {uploading ? 'Uploading…' : 'Upload Markdown'}
             </button>
           </div>
 
           {loading && !selected ? (
-            <div className="flex items-center justify-center py-8">
+            <div className="flex items-center justify-center py-8 px-1 mt-2">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
             </div>
           ) : filteredProtocols.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8 text-sm">
-              {searchQuery.trim() ? 'No matching protocols' : 'No protocols yet'}
+            <div
+              className={`mt-2 rounded-lg border-2 border-dashed px-4 py-8 text-center text-sm transition-colors ${
+                dragActive
+                  ? 'border-primary bg-primary/5 text-primary'
+                  : 'border-border text-muted-foreground'
+              }`}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+            >
+              {searchQuery.trim() ? (
+                'No matching protocols'
+              ) : (
+                <>
+                  <p className="mb-2">No protocols yet</p>
+                  <p className="text-xs mb-3">Drop a .md file here or use Upload Markdown above</p>
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="px-3 py-1.5 bg-primary/20 text-primary border border-primary/30 rounded-md text-xs hover:bg-primary/30"
+                  >
+                    Upload Markdown
+                  </button>
+                </>
+              )}
             </div>
           ) : (
-            <div className="space-y-0.5 max-h-[420px] overflow-y-auto">
+            <div
+              className={`space-y-0.5 max-h-[420px] overflow-y-auto mt-2 px-1 rounded-lg transition-colors ${
+                dragActive ? 'ring-2 ring-primary/50 ring-inset' : ''
+              }`}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+            >
               {filteredProtocols.map((p) => (
                 <button
                   key={p.name}
@@ -282,7 +346,7 @@ export function ProtocolsPanel() {
           )}
         </div>
 
-        <div className="lg:col-span-2 bg-card border border-border rounded-lg p-6">
+        <div className="lg:col-span-2 bg-card border border-border rounded-lg p-6 flex flex-col">
           <div className="flex items-start justify-between gap-4 mb-4">
             <div className="min-w-0 flex-1">
               <h2 className="text-xl font-semibold text-foreground truncate">
@@ -290,26 +354,29 @@ export function ProtocolsPanel() {
                   ? (meta?.title || selected.replace(/\.md$/, '').replace(/-/g, ' '))
                   : 'Select a protocol'}
               </h2>
-              {filePath && (
-                <p className="text-xs text-muted-foreground mt-1 font-mono truncate">{filePath}</p>
-              )}
-              {meta && (meta.purpose || meta.scope || meta.owner || meta.status) && (
-                <div className="flex flex-wrap gap-3 mt-2 text-xs text-muted-foreground">
-                  {meta.purpose && <span>Purpose: {meta.purpose}</span>}
-                  {meta.scope && <span>Scope: {meta.scope}</span>}
-                  {meta.owner && <span>Owner: {meta.owner}</span>}
-                  {meta.status && (
-                    <span
-                      className={
-                        meta.status === 'active'
-                          ? 'text-green-400'
-                          : meta.status === 'draft'
-                            ? 'text-amber-400'
-                            : ''
-                      }
-                    >
-                      Status: {meta.status}
-                    </span>
+              {/* Detail view: file path and metadata summary */}
+              {selected && (
+                <div className="mt-2 p-3 rounded-lg bg-surface-1/50 border border-border text-xs space-y-2">
+                  <div className="font-mono text-muted-foreground break-all">{filePath}</div>
+                  {meta && (meta.purpose || meta.scope || meta.owner || meta.status) && (
+                    <div className="flex flex-wrap gap-3 text-muted-foreground pt-1 border-t border-border">
+                      {meta.purpose && <span>Purpose: {meta.purpose}</span>}
+                      {meta.scope && <span>Scope: {meta.scope}</span>}
+                      {meta.owner && <span>Owner: {meta.owner}</span>}
+                      {meta.status && (
+                        <span
+                          className={
+                            meta.status === 'active'
+                              ? 'text-green-400'
+                              : meta.status === 'draft'
+                                ? 'text-amber-400'
+                                : ''
+                          }
+                        >
+                          Status: {meta.status}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -392,51 +459,25 @@ export function ProtocolsPanel() {
               )}
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-              <p className="text-sm">Select a protocol from the list or create a new one</p>
+            <div
+              className={`flex flex-col items-center justify-center py-16 text-muted-foreground rounded-lg border-2 border-dashed transition-colors ${
+                dragActive ? 'border-primary bg-primary/5' : 'border-border'
+              }`}
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+            >
+              <p className="text-sm">Select a protocol from the list or upload a Markdown file</p>
               <button
-                onClick={() => setShowCreateModal(true)}
+                onClick={() => fileInputRef.current?.click()}
                 className="mt-4 px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90 transition-smooth"
               >
-                Create Protocol
+                Upload Markdown
               </button>
             </div>
           )}
         </div>
       </div>
-
-      {showCreateModal && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-card border border-border rounded-lg p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold text-foreground mb-4">New Protocol</h3>
-            <input
-              type="text"
-              value={createName}
-              onChange={(e) => setCreateName(e.target.value)}
-              placeholder="agent-creation-protocol.md"
-              className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground mb-4 focus:outline-none focus:ring-1 focus:ring-primary/50"
-            />
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => {
-                  setShowCreateModal(false)
-                  setCreateName('')
-                }}
-                className="px-4 py-2 bg-secondary text-muted-foreground rounded-md hover:bg-surface-2 transition-smooth"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={createProtocol}
-                disabled={!createName.trim().endsWith('.md')}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-smooth"
-              >
-                Create
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showDeleteConfirm && selected && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">

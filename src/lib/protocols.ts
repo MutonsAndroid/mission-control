@@ -5,6 +5,7 @@
  */
 
 import fs from 'node:fs'
+import { extractFrontmatter } from './markdown-frontmatter'
 import path from 'node:path'
 import { config } from './config'
 import { ensureDirExists } from './config'
@@ -181,7 +182,28 @@ status: draft
 `
 
 /**
- * Create a new protocol file.
+ * Upload a Markdown file into BRAIN/_portfolio/protocols/.
+ * Overwrites if the file exists. Uses the provided filename as-is (must end with .md).
+ */
+export function uploadProtocol(filename: string, content: string): boolean {
+  const base = getProtocolsDir()
+  if (!base) return false
+  ensureProtocolsDir()
+  const normalized = path.normalize(filename).replace(/^\.\//, '')
+  if (!normalized.endsWith('.md')) return false
+  if (normalized.includes('..') || path.isAbsolute(normalized)) return false
+  const fullPath = path.join(base, normalized)
+  try {
+    fs.writeFileSync(fullPath, content, 'utf-8')
+    return true
+  } catch (err) {
+    logger.error({ err, path: fullPath }, 'uploadProtocol failed')
+    return false
+  }
+}
+
+/**
+ * Create a new protocol file (empty or with content). Fails if file exists.
  */
 export function createProtocol(filename: string, content: string = ''): boolean {
   const base = getProtocolsDir()
