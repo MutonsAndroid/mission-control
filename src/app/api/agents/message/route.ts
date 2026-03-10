@@ -22,51 +22,87 @@ export async function POST(request: NextRequest) {
     const from = auth.user.display_name || auth.user.username || 'system'
 
     const db = getDatabase()
-    const workspaceId = auth.user.workspace_id ?? 1;
-    const agent = db
-      .prepare('SELECT * FROM agents WHERE name = ? AND workspace_id = ?')
+    const workspaceId = auth.user.workspace_id ?? 1
+    let agent = db
+      .prepare('SELECT * FROM agents WHERE lower(name) = lower(?) AND workspace_id = ?')
       .get(to, workspaceId) as any
+
+    // Fallback: allow messaging Sampson even when not in DB (virtual registry entry)
+    if (!agent && String(to).toLowerCase() === 'sampson') {
+      agent = { id: 'sampson', name: 'Sampson', session_key: null, config: JSON.stringify({ openclawId: 'sampson' }) }
+    }
+
     if (!agent) {
       return NextResponse.json({ error: 'Recipient agent not found' }, { status: 404 })
     }
-    if (!agent.session_key) {
-      return NextResponse.json(
-        { error: 'Recipient agent has no session key configured' },
-        { status: 400 }
-      )
-    }
+
+    const openclawAgentId = (() => {
+      if (agent?.config) {
+        try {
+          const cfg = JSON.parse(agent.config)
+          if (cfg?.openclawId && typeof cfg.openclawId === 'string') return cfg.openclawId
+        } catch { /* ignore */ }
+      }
+      return String(to).toLowerCase().replace(/\s+/g, '-')
+    })()
 
     const paths = getBootPaths()
     if (paths) {
       runRecall(paths, `Message from ${from} to ${to}: ${message}`)
     }
 
-    await runOpenClaw(
-      [
-        'gateway',
-        'sessions_send',
-        '--session',
-        agent.session_key,
-        '--message',
-        `Message from ${from}: ${message}`
-      ],
-      { timeoutMs: 10000 }
-    )
+    if (agent.session_key) {
+      await runOpenClaw(
+        [
+          'gateway',
+          'sessions_send',
+          '--session',
+          agent.session_key,
+          '--message',
+          `Message from ${from}: ${message}`
+        ],
+        { timeoutMs: 10000 }
+      )
+    } else if (openclawAgentId) {
+      await runOpenClaw(
+        [
+          'gateway',
+          'call',
+          'agent',
+          '--timeout',
+          '10000',
+          '--params',
+          JSON.stringify({
+            message: `Message from ${from}: ${message}`,
+            agentId: openclawAgentId,
+            deliver: false,
+          }),
+          '--json',
+        ],
+        { timeoutMs: 12000 }
+      )
+    } else {
+      return NextResponse.json(
+        { error: 'Recipient agent has no session or openclaw ID configured' },
+        { status: 400 }
+      )
+    }
 
+    const agentIdForLog = typeof agent.id === 'number' ? agent.id : 0
     db_helpers.createNotification(
       to,
       'message',
       'Direct Message',
       `${from}: ${message.substring(0, 200)}${message.length > 200 ? '...' : ''}`,
       'agent',
-      agent.id,
+      agentIdForLog,
       workspaceId
     )
 
     db_helpers.logActivity(
       'agent_message',
       'agent',
-      agent.id,
+      agentIdForLog,
       from,
       `Sent message to ${to}`,
       { to },

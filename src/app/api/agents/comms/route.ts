@@ -21,27 +21,48 @@ export async function GET(request: NextRequest) {
     const since = searchParams.get("since")
     const agent = searchParams.get("agent")
 
-    // Filter out human/system messages - only agent-to-agent
+    // Filter out human/system messages - only agent-to-agent (except when querying Sampson: allow user↔agent)
     const humanNames = ["human", "system", "operator"]
     const humanPlaceholders = humanNames.map(() => "?").join(",")
+    const isSampsonQuery = agent && String(agent).toLowerCase() === "sampson"
 
-    // 1. Get inter-agent messages
-    let messagesQuery = `
-      SELECT * FROM messages
-      WHERE workspace_id = ?
-        AND to_agent IS NOT NULL
-        AND from_agent NOT IN (${humanPlaceholders})
-        AND to_agent NOT IN (${humanPlaceholders})
-    `
-    const messagesParams: any[] = [workspaceId, ...humanNames, ...humanNames]
+    // 1. Get inter-agent messages (include user↔Sampson when querying Sampson)
+    let messagesQuery: string
+    let messagesParams: any[]
+    if (isSampsonQuery) {
+      messagesQuery = `
+        SELECT * FROM messages
+        WHERE workspace_id = ?
+          AND to_agent IS NOT NULL
+          AND (
+            (from_agent NOT IN (${humanPlaceholders}) AND to_agent NOT IN (${humanPlaceholders}))
+            OR (from_agent IN (${humanPlaceholders}) AND LOWER(to_agent) = 'sampson')
+            OR (LOWER(from_agent) = 'sampson' AND to_agent IN (${humanPlaceholders}))
+          )
+      `
+      messagesParams = [workspaceId, ...humanNames, ...humanNames, ...humanNames, ...humanNames]
+    } else {
+      messagesQuery = `
+        SELECT * FROM messages
+        WHERE workspace_id = ?
+          AND to_agent IS NOT NULL
+          AND from_agent NOT IN (${humanPlaceholders})
+          AND to_agent NOT IN (${humanPlaceholders})
+      `
+      messagesParams = [workspaceId, ...humanNames, ...humanNames]
+    }
 
     if (since) {
       messagesQuery += " AND created_at > ?"
       messagesParams.push(parseInt(since))
     }
     if (agent) {
-      messagesQuery += " AND (from_agent = ? OR to_agent = ?)"
-      messagesParams.push(agent, agent)
+      if (isSampsonQuery) {
+        messagesQuery += " AND (LOWER(from_agent) = 'sampson' OR LOWER(to_agent) = 'sampson')"
+      } else {
+        messagesQuery += " AND (from_agent = ? OR to_agent = ?)"
+        messagesParams.push(agent, agent)
+      }
     }
 
     // Deterministic chronological ordering prevents visual jumps in UI
@@ -90,39 +111,74 @@ export async function GET(request: NextRequest) {
     const statsParams = [workspaceId, ...humanNames, ...humanNames, workspaceId, ...humanNames, ...humanNames]
     const agentStats = db.prepare(statsQuery).all(...statsParams)
 
-    // 4. Total count
-    let countQuery = `
-      SELECT COUNT(*) as total FROM messages
-      WHERE workspace_id = ?
-        AND to_agent IS NOT NULL
-        AND from_agent NOT IN (${humanPlaceholders})
-        AND to_agent NOT IN (${humanPlaceholders})
-    `
-    const countParams: any[] = [workspaceId, ...humanNames, ...humanNames]
+    // 4. Total count (same filter logic as messages)
+    let countQuery: string
+    let countParams: any[]
+    if (isSampsonQuery) {
+      countQuery = `
+        SELECT COUNT(*) as total FROM messages
+        WHERE workspace_id = ?
+          AND to_agent IS NOT NULL
+          AND (
+            (from_agent NOT IN (${humanPlaceholders}) AND to_agent NOT IN (${humanPlaceholders}))
+            OR (from_agent IN (${humanPlaceholders}) AND LOWER(to_agent) = 'sampson')
+            OR (LOWER(from_agent) = 'sampson' AND to_agent IN (${humanPlaceholders}))
+          )
+          AND (LOWER(from_agent) = 'sampson' OR LOWER(to_agent) = 'sampson')
+      `
+      countParams = [workspaceId, ...humanNames, ...humanNames, ...humanNames, ...humanNames]
+    } else {
+      countQuery = `
+        SELECT COUNT(*) as total FROM messages
+        WHERE workspace_id = ?
+          AND to_agent IS NOT NULL
+          AND from_agent NOT IN (${humanPlaceholders})
+          AND to_agent NOT IN (${humanPlaceholders})
+      `
+      countParams = [workspaceId, ...humanNames, ...humanNames]
+    }
     if (since) {
       countQuery += " AND created_at > ?"
       countParams.push(parseInt(since))
     }
-    if (agent) {
+    if (agent && !isSampsonQuery) {
       countQuery += " AND (from_agent = ? OR to_agent = ?)"
       countParams.push(agent, agent)
     }
     const { total } = db.prepare(countQuery).get(...countParams) as { total: number }
 
-    let seededCountQuery = `
-      SELECT COUNT(*) as seeded FROM messages
-      WHERE workspace_id = ?
-        AND to_agent IS NOT NULL
-        AND from_agent NOT IN (${humanPlaceholders})
-        AND to_agent NOT IN (${humanPlaceholders})
-        AND conversation_id LIKE ?
-    `
-    const seededParams: any[] = [workspaceId, ...humanNames, ...humanNames, "conv-multi-%"]
+    let seededCountQuery: string
+    let seededParams: any[]
+    if (isSampsonQuery) {
+      seededCountQuery = `
+        SELECT COUNT(*) as seeded FROM messages
+        WHERE workspace_id = ?
+          AND to_agent IS NOT NULL
+          AND (
+            (from_agent NOT IN (${humanPlaceholders}) AND to_agent NOT IN (${humanPlaceholders}))
+            OR (from_agent IN (${humanPlaceholders}) AND LOWER(to_agent) = 'sampson')
+            OR (LOWER(from_agent) = 'sampson' AND to_agent IN (${humanPlaceholders}))
+          )
+          AND (LOWER(from_agent) = 'sampson' OR LOWER(to_agent) = 'sampson')
+          AND conversation_id LIKE ?
+      `
+      seededParams = [workspaceId, ...humanNames, ...humanNames, ...humanNames, ...humanNames, "conv-multi-%"]
+    } else {
+      seededCountQuery = `
+        SELECT COUNT(*) as seeded FROM messages
+        WHERE workspace_id = ?
+          AND to_agent IS NOT NULL
+          AND from_agent NOT IN (${humanPlaceholders})
+          AND to_agent NOT IN (${humanPlaceholders})
+          AND conversation_id LIKE ?
+      `
+      seededParams = [workspaceId, ...humanNames, ...humanNames, "conv-multi-%"]
+    }
     if (since) {
       seededCountQuery += " AND created_at > ?"
       seededParams.push(parseInt(since))
     }
-    if (agent) {
+    if (agent && !isSampsonQuery) {
       seededCountQuery += " AND (from_agent = ? OR to_agent = ?)"
       seededParams.push(agent, agent)
     }

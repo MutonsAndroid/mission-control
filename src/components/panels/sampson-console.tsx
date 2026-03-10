@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigateToPanel } from '@/lib/navigation'
-import { useMissionControl } from '@/store'
 import { AgentCommsPanel } from './agent-comms-panel'
 
 interface PortfolioData {
@@ -21,9 +20,7 @@ interface BrainProject {
 }
 
 export function SampsonConsole() {
-  const { dashboardMode } = useMissionControl()
   const navigateToPanel = useNavigateToPanel()
-  const isLocal = dashboardMode === 'local'
 
   const [portfolio, setPortfolio] = useState<PortfolioData | null>(null)
   const [projects, setProjects] = useState<BrainProject[]>([])
@@ -136,11 +133,9 @@ export function SampsonConsole() {
       )}
 
       {/* Sampson Chat */}
-      {!isLocal && (
-        <div className="mt-4 rounded-xl border border-border bg-card overflow-hidden">
-          <AgentCommsPanel />
-        </div>
-      )}
+      <div className="mt-4 rounded-xl border border-border bg-card overflow-hidden">
+        <AgentCommsPanel defaultToAgent="Sampson" />
+      </div>
     </div>
   )
 }

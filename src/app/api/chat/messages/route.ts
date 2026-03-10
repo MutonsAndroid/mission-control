@@ -364,20 +364,24 @@ export async function POST(request: NextRequest) {
             }
           }
 
-          // Coordinator mode should always show visible coordinator feedback in thread.
-          if (
-            typeof conversation_id === 'string' &&
-            conversation_id.startsWith('coord:') &&
-            forwardInfo.delivered
-          ) {
+          // Coordinator or Sampson: show visible feedback and wait for reply
+          const isCoordinator = typeof conversation_id === 'string' && conversation_id.startsWith('coord:')
+          const isSampson = to && String(to).toLowerCase() === 'sampson'
+          const shouldWaitForReply = (isCoordinator || isSampson) && forwardInfo.delivered
+
+          if (shouldWaitForReply) {
+            const replyAgent = isCoordinator ? COORDINATOR_AGENT : (to as string)
+            const statusMessage = isCoordinator
+              ? 'Received. I am coordinating downstream agents now.'
+              : 'Received. Processing your message.'
             try {
               createChatReply(
                 db,
                 workspaceId,
                 conversation_id,
-                COORDINATOR_AGENT,
+                replyAgent,
                 from,
-                'Received. I am coordinating downstream agents now.',
+                statusMessage,
                 'status',
                 { status: 'accepted', runId: forwardInfo.runId || null }
               )
@@ -405,6 +409,7 @@ export async function POST(request: NextRequest) {
                 const waitPayload = parseGatewayJson(waitResult.stdout)
                 const waitStatus = String(waitPayload?.status || '').toLowerCase()
 
+                const replyAgentName = isCoordinator ? COORDINATOR_AGENT : (to as string)
                 if (waitStatus === 'error') {
                   const reason =
                     typeof waitPayload?.error === 'string'
@@ -414,7 +419,7 @@ export async function POST(request: NextRequest) {
                     db,
                     workspaceId,
                     conversation_id,
-                    COORDINATOR_AGENT,
+                    replyAgentName,
                     from,
                     `I received your message, but execution failed: ${reason}`,
                     'status',
@@ -425,7 +430,7 @@ export async function POST(request: NextRequest) {
                     db,
                     workspaceId,
                     conversation_id,
-                    COORDINATOR_AGENT,
+                    replyAgentName,
                     from,
                     'I received your message and I am still processing it. I will post results as soon as execution completes.',
                     'status',
@@ -438,7 +443,7 @@ export async function POST(request: NextRequest) {
                       db,
                       workspaceId,
                       conversation_id,
-                      COORDINATOR_AGENT,
+                      replyAgentName,
                       from,
                       replyText,
                       'text',
@@ -449,7 +454,7 @@ export async function POST(request: NextRequest) {
                       db,
                       workspaceId,
                       conversation_id,
-                      COORDINATOR_AGENT,
+                      replyAgentName,
                       from,
                       'Execution accepted and completed. No textual response payload was returned by the runtime.',
                       'status',
@@ -466,11 +471,12 @@ export async function POST(request: NextRequest) {
                     ? waitPayload.error
                     : (maybeWaitStderr || maybeWaitStdout || 'Unable to read completion status from coordinator runtime.').trim()
 
+                const replyAgentName = isCoordinator ? COORDINATOR_AGENT : (to as string)
                 createChatReply(
                   db,
                   workspaceId,
                   conversation_id,
-                  COORDINATOR_AGENT,
+                  replyAgentName,
                   from,
                   `I received your message, but I could not retrieve completion output yet: ${reason}`,
                   'status',

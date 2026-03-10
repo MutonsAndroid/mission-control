@@ -52,6 +52,7 @@ interface AgentOption {
 // Agent identity: color + emoji (matches openclaw.json)
 const AGENT_IDENTITY: Record<string, { color: string; emoji: string; label: string }> = {
   [COORDINATOR_AGENT]: { color: '#a78bfa', emoji: '🧭', label: 'Coordinator' },
+  sampson:        { color: '#10b981', emoji: '🎯', label: 'Sampson' },
   builder:        { color: '#60a5fa', emoji: '🛠️', label: 'Builder' },
   research:       { color: '#4ade80', emoji: '🔬', label: 'Research' },
   content:        { color: '#818cf8', emoji: '✏️', label: 'Content' },
@@ -98,18 +99,22 @@ function timeAgo(ts: number): string {
   return `${Math.floor(diff / 86400)}d ago`
 }
 
-export function AgentCommsPanel() {
+interface AgentCommsPanelProps {
+  defaultToAgent?: string
+}
+
+export function AgentCommsPanel({ defaultToAgent }: AgentCommsPanelProps = {}) {
   const [data, setData] = useState<CommsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<string>('all')
+  const [filter, setFilter] = useState<string>(defaultToAgent || 'all')
   const [view, setView] = useState<'chat' | 'graph'>('chat')
   const [agentOptions, setAgentOptions] = useState<AgentOption[]>([])
-  const [toAgent, setToAgent] = useState('')
+  const [toAgent, setToAgent] = useState(defaultToAgent || '')
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
-  const [composerMode, setComposerMode] = useState<'coordinator' | 'agent'>('coordinator')
+  const [composerMode, setComposerMode] = useState<'coordinator' | 'agent'>(defaultToAgent ? 'agent' : 'coordinator')
   const { currentUser } = useMissionControl()
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -154,11 +159,17 @@ export function AgentCommsPanel() {
   ])).sort()
 
   useEffect(() => {
-    if (!toAgent && allAgents.length > 0) {
+    if (defaultToAgent) {
+      if (allAgents.some((a) => a.toLowerCase() === defaultToAgent!.toLowerCase())) {
+        setToAgent(defaultToAgent)
+        setComposerMode('agent')
+        setFilter(defaultToAgent)
+      }
+    } else if (!toAgent && allAgents.length > 0) {
       const firstTarget = allAgents.find((name) => name !== COORDINATOR_AGENT) || allAgents[0]
       setToAgent(firstTarget)
     }
-  }, [allAgents, toAgent])
+  }, [allAgents, toAgent, defaultToAgent])
 
   async function sendComposedMessage() {
     const content = draft.trim()

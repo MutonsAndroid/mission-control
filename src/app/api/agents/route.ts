@@ -110,9 +110,26 @@ export async function GET(request: NextRequest) {
       'GET /api/agents: agent list'
     );
 
+    // Fallback: ensure Sampson always appears in registry when missing from discovery
+    const hasSampson = agentsWithStats.some(
+      (a) => String(a.name || '').toLowerCase() === 'sampson' || String((a as any).config?.openclawId || '').toLowerCase() === 'sampson'
+    );
+    let finalAgents = agentsWithStats;
+    if (!hasSampson) {
+      const fallbackSampson = {
+        id: 'sampson',
+        name: 'Sampson',
+        role: 'General Manager',
+        status: 'offline' as const,
+        taskStats: { total: 0, assigned: 0, in_progress: 0, completed: 0 },
+        config: { openclawId: 'sampson' },
+      };
+      finalAgents = [...agentsWithStats, fallbackSampson as any];
+    }
+
     return NextResponse.json({
-      agents: agentsWithStats,
-      total: countRow.total,
+      agents: finalAgents,
+      total: finalAgents.length,
       page: Math.floor(offset / limit) + 1,
       limit
     });
