@@ -63,30 +63,18 @@ const statusIcons: Record<string, string> = {
   error: '!',
 }
 
-// Overview Tab Component
+// Overview Tab Component — driven entirely by IDENTITY.md (parsed identity)
 export function OverviewTab({
   agent,
-  editing,
-  formData,
-  setFormData,
-  onSave,
   onStatusUpdate,
   onWakeAgent,
-  onEdit,
-  onCancel,
   heartbeatData,
   loadingHeartbeat,
   onPerformHeartbeat
 }: {
   agent: Agent
-  editing: boolean
-  formData: any
-  setFormData: (data: any) => void
-  onSave: () => Promise<void>
   onStatusUpdate: (name: string, status: Agent['status'], activity?: string) => Promise<void>
   onWakeAgent: (name: string, sessionKey: string) => Promise<void>
-  onEdit: () => void
-  onCancel: () => void
   heartbeatData: HeartbeatResponse | null
   loadingHeartbeat: boolean
   onPerformHeartbeat: () => Promise<void>
@@ -222,92 +210,68 @@ export function OverviewTab({
         )}
       </div>
 
-      {/* Identity (from IDENTITY.md when available) */}
-      {((agent as any).identity) && (
-        <div className="space-y-4 p-4 bg-surface-1/50 rounded-lg">
-          <h4 className="text-sm font-medium text-foreground">Identity (IDENTITY.md)</h4>
-          <div className="grid gap-3 text-sm">
-            {(agent as any).identity.name && (
-              <div>
-                <label className="block text-xs text-muted-foreground mb-0.5">Name</label>
-                <p className="text-foreground">{(agent as any).identity.name}</p>
-              </div>
-            )}
-            {(agent as any).identity.role && (
-              <div>
-                <label className="block text-xs text-muted-foreground mb-0.5">Role</label>
-                <p className="text-foreground">{(agent as any).identity.role}</p>
-              </div>
-            )}
-            {(agent as any).identity.purpose && (
-              <div>
-                <label className="block text-xs text-muted-foreground mb-0.5">Purpose</label>
-                <p className="text-foreground">{(agent as any).identity.purpose}</p>
-              </div>
-            )}
-            {(agent as any).identity.owner && (
-              <div>
-                <label className="block text-xs text-muted-foreground mb-0.5">Owner</label>
-                <p className="text-foreground">{(agent as any).identity.owner}</p>
-              </div>
-            )}
-            {(agent as any).identity.tone && (
-              <div>
-                <label className="block text-xs text-muted-foreground mb-0.5">Personality Tone</label>
-                <p className="text-foreground">{(agent as any).identity.tone}</p>
-              </div>
-            )}
-            {((agent as any).identity.responsibilities?.length ?? 0) > 0 && (
-              <div>
-                <label className="block text-xs text-muted-foreground mb-1">Responsibilities</label>
-                <ul className="list-disc list-inside text-foreground space-y-0.5">
-                  {((agent as any).identity.responsibilities || []).map((r: string, i: number) => (
-                    <li key={i}>{r}</li>
-                  ))}
-                </ul>
+      {/* Agent Card — from IDENTITY.md (parsed) */}
+      <div className="space-y-4 p-4 bg-surface-1/50 rounded-lg">
+        <h4 className="text-sm font-medium text-foreground">Agent Profile</h4>
+        <div className="grid gap-3 text-sm">
+          <div>
+            <label className="block text-xs text-muted-foreground mb-0.5">Name</label>
+            <p className="text-foreground">{(agent as any).identity?.name || agent.name || '—'}</p>
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-0.5">Role</label>
+            <p className="text-foreground">{(agent as any).identity?.role || agent.role || '—'}</p>
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-0.5">Owner</label>
+            <p className="text-foreground">{(agent as any).identity?.owner || '—'}</p>
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-0.5">Purpose</label>
+            <p className="text-foreground">{(agent as any).identity?.purpose || '—'}</p>
+          </div>
+          <div>
+            <label className="block text-xs text-muted-foreground mb-0.5">Personality Tone</label>
+            <p className="text-foreground">{(agent as any).identity?.tone || '—'}</p>
+          </div>
+          {((agent as any).identity?.responsibilities?.length ?? 0) > 0 && (
+            <div>
+              <label className="block text-xs text-muted-foreground mb-1">Responsibilities</label>
+              <ul className="list-disc list-inside text-foreground space-y-0.5">
+                {((agent as any).identity.responsibilities || []).map((r: string, i: number) => (
+                  <li key={i}>{r}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div>
+            <label className="block text-xs text-muted-foreground mb-0.5">Status</label>
+            <p className="text-foreground">
+              <span className={`inline-flex items-center gap-1.5`}>
+                <span className={`w-2 h-2 rounded-full ${statusColors[agent.status]}`} />
+                {agent.status}
+              </span>
+            </p>
+          </div>
+        </div>
+        <p className="text-xs text-muted-foreground mt-2">
+          Edit profile in the Identity tab. Markdown files are the source of truth.
+        </p>
+      </div>
+
+      {/* Operational Details */}
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-muted-foreground mb-1">Session Key</label>
+          <div className="flex items-center gap-2">
+            <p className="text-foreground font-mono">{agent.session_key || 'Not set'}</p>
+            {agent.session_key && (
+              <div className="flex items-center gap-1 text-xs text-green-400">
+                <div className="w-2 h-2 rounded-full bg-green-400"></div>
+                <span>Bound</span>
               </div>
             )}
           </div>
-        </div>
-      )}
-
-      {/* Agent Details */}
-      <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-muted-foreground mb-1">Role</label>
-          {editing ? (
-            <input
-              type="text"
-              value={formData.role}
-              onChange={(e) => setFormData((prev: any) => ({ ...prev, role: e.target.value }))}
-              className="w-full bg-surface-1 text-foreground border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50"
-            />
-          ) : (
-            <p className="text-foreground">{agent.role}</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-muted-foreground mb-1">Session Key</label>
-          {editing ? (
-            <input
-              type="text"
-              value={formData.session_key}
-              onChange={(e) => setFormData((prev: any) => ({ ...prev, session_key: e.target.value }))}
-              className="w-full bg-surface-1 text-foreground border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50"
-              placeholder="OpenClaw session identifier"
-            />
-          ) : (
-            <div className="flex items-center gap-2">
-              <p className="text-foreground font-mono">{agent.session_key || 'Not set'}</p>
-              {agent.session_key && (
-                <div className="flex items-center gap-1 text-xs text-green-400">
-                  <div className="w-2 h-2 rounded-full bg-green-400"></div>
-                  <span>Bound</span>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Task Statistics */}
@@ -354,72 +318,89 @@ export function OverviewTab({
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex gap-3 mt-6">
-        {editing ? (
-          <>
-            <button
-              type="button"
-              onClick={onSave}
-              className="flex-1 bg-primary text-primary-foreground py-2 rounded-md hover:bg-primary/90 transition-smooth"
-            >
-              Save Changes
-            </button>
-            <button
-              type="button"
-              onClick={onCancel}
-              className="flex-1 bg-secondary text-muted-foreground py-2 rounded-md hover:bg-surface-2 transition-smooth"
-            >
-              Cancel
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            onClick={onEdit}
-            className="flex-1 bg-primary text-primary-foreground py-2 rounded-md hover:bg-primary/90 transition-smooth"
-          >
-            Edit Agent
-          </button>
-        )}
-      </div>
     </div>
   )
 }
 
-// SOUL Tab Component
+// Structured Soul type (from SOUL.md parser)
+interface SoulStructured {
+  philosophy: string
+  operatingModel: string
+  reasoningStyle: string
+  communicationStyle: string
+  directives: string[]
+  rawMarkdown: string
+}
+
+// SOUL Tab Component — driven by SOUL.md (Structured View | Markdown View)
 export function SoulTab({
   agent,
-  soulContent,
+  soulContent: initialSoulContent,
   templates,
-  onSave
+  onSave,
+  onSoulSaved
 }: {
   agent: Agent
   soulContent: string
   templates: SoulTemplate[]
   onSave: (content: string, templateName?: string) => Promise<void>
+  onSoulSaved?: () => void
 }) {
-  const [editing, setEditing] = useState(false)
-  const [content, setContent] = useState(soulContent)
+  const [mode, setMode] = useState<'structured' | 'markdown'>('structured')
+  const [content, setContent] = useState(initialSoulContent)
+  const [structured, setStructured] = useState<SoulStructured | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [selectedTemplate, setSelectedTemplate] = useState<string>('')
+  const agentId = (agent as any).id ?? agent.name
 
   useEffect(() => {
-    setContent(soulContent)
-  }, [soulContent])
+    setContent(initialSoulContent)
+  }, [initialSoulContent])
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      setLoading(true)
+      try {
+        const res = await fetch(`/api/agents/${agentId}/soul`)
+        if (!res.ok) return
+        const data = await res.json()
+        if (!cancelled) {
+          setContent(data.soul_content ?? '')
+          setStructured(data.soulStructured ?? null)
+        }
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [agentId])
 
   const handleSave = async () => {
-    await onSave(content)
-    setEditing(false)
+    setSaving(true)
+    try {
+      await onSave(content)
+      const res = await fetch(`/api/agents/${agentId}/soul`)
+      if (res.ok) {
+        const data = await res.json()
+        setStructured(data.soulStructured ?? null)
+      }
+      onSoulSaved?.()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleLoadTemplate = async (templateName: string) => {
     try {
-      const response = await fetch(`/api/agents/${agent.name}/soul?template=${templateName}`, {
+      const response = await fetch(`/api/agents/${agentId}/soul?template=${encodeURIComponent(templateName)}`, {
         method: 'PATCH'
       })
       if (response.ok) {
         const data = await response.json()
-        setContent(data.content)
+        if (data.content) setContent(data.content)
         setSelectedTemplate(templateName)
       }
     } catch (error) {
@@ -427,25 +408,56 @@ export function SoulTab({
     }
   }
 
+  const renderSection = (title: string, text: string) =>
+    text ? (
+      <div className="mb-4">
+        <h5 className="text-sm font-medium text-foreground mb-2">{title}</h5>
+        <div className="text-foreground/90 text-sm whitespace-pre-wrap bg-surface-1/30 rounded-lg p-3">
+          {text}
+        </div>
+      </div>
+    ) : null
+
+  if (loading) {
+    return (
+      <div className="p-6 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 space-y-4">
       <div className="flex justify-between items-center">
-        <h4 className="text-lg font-medium text-foreground">SOUL Configuration</h4>
-        <div className="flex gap-2">
-          {!editing && (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-smooth"
-            >
-              Edit SOUL
-            </button>
-          )}
+        <h4 className="text-lg font-medium text-foreground">SOUL — How I Think</h4>
+        <div className="flex gap-1 text-xs">
+          <button
+            type="button"
+            onClick={() => setMode('structured')}
+            className={`px-2 py-1.5 rounded transition-smooth ${
+              mode === 'structured'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-surface-2 text-muted-foreground hover:bg-surface-1'
+            }`}
+          >
+            Structured View
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('markdown')}
+            className={`px-2 py-1.5 rounded transition-smooth ${
+              mode === 'markdown'
+                ? 'bg-primary text-primary-foreground'
+                : 'bg-surface-2 text-muted-foreground hover:bg-surface-1'
+            }`}
+          >
+            Markdown View
+          </button>
         </div>
       </div>
 
       {/* Template Selector */}
-      {editing && templates.length > 0 && (
+      {mode === 'markdown' && templates.length > 0 && (
         <div className="p-4 bg-surface-1/50 rounded-lg">
           <h5 className="text-sm font-medium text-foreground mb-2">Load Template</h5>
           <div className="flex gap-2">
@@ -473,64 +485,84 @@ export function SoulTab({
         </div>
       )}
 
-      {/* SOUL Editor */}
-      <div>
-        <label className="block text-sm font-medium text-muted-foreground mb-1">
-          SOUL Content ({content.length} characters)
-        </label>
-        {editing ? (
+      {mode === 'structured' ? (
+        <div className="space-y-4">
+          <p className="text-xs text-muted-foreground">
+            Parsed from SOUL.md. Switch to Markdown View to edit.
+          </p>
+          {structured ? (
+            <div className="space-y-4">
+              {renderSection('Core Philosophy', structured.philosophy)}
+              {renderSection('Operating Model', structured.operatingModel)}
+              {renderSection('Reasoning Style', structured.reasoningStyle)}
+              {renderSection('Communication Style', structured.communicationStyle)}
+              {structured.directives.length > 0 && (
+                <div className="mb-4">
+                  <h5 className="text-sm font-medium text-foreground mb-2">Directives</h5>
+                  <ul className="list-disc list-inside text-foreground/90 text-sm space-y-1 bg-surface-1/30 rounded-lg p-3">
+                    {structured.directives.map((d, i) => (
+                      <li key={i}>{d}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              {!structured.philosophy && !structured.operatingModel && !structured.reasoningStyle &&
+               !structured.communicationStyle && structured.directives.length === 0 && (
+                <p className="text-muted-foreground italic">No structured sections found. Add sections like # Core Philosophy, # Directives to SOUL.md.</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-muted-foreground italic">No SOUL content defined. Switch to Markdown View to create.</p>
+          )}
+        </div>
+      ) : (
+        <div>
+          <label className="block text-sm font-medium text-muted-foreground mb-1">
+            SOUL Content ({content.length} characters)
+          </label>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={20}
             className="w-full bg-surface-1 text-foreground border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-1 focus:ring-primary/50 font-mono text-sm"
-            placeholder="Define the agent's personality, instructions, and behavior patterns..."
+            placeholder="# Core Philosophy&#10;Describe how the agent approaches problems.&#10;&#10;# Directives&#10;- Remain structured"
+            spellCheck={false}
           />
-        ) : (
-          <div className="bg-surface-1/30 rounded p-4 max-h-96 overflow-y-auto">
-            {content ? (
-              <pre className="text-foreground whitespace-pre-wrap text-sm">{content}</pre>
-            ) : (
-              <p className="text-muted-foreground italic">No SOUL content defined</p>
-            )}
+          <p className="text-xs text-muted-foreground mt-1">
+            Save to update SOUL.md. Structured view will refresh with parsed sections.
+          </p>
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 disabled:opacity-50 transition-smooth text-sm"
+            >
+              {saving ? 'Saving...' : 'Save SOUL'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('structured')}
+              className="px-4 py-2 bg-surface-2 text-muted-foreground rounded-md hover:bg-surface-1 transition-smooth text-sm"
+            >
+              View Structured
+            </button>
           </div>
-        )}
-      </div>
-
-      {/* Actions */}
-      {editing && (
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={handleSave}
-            className="flex-1 bg-primary text-primary-foreground py-2 rounded-md hover:bg-primary/90 transition-smooth"
-          >
-            Save SOUL
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setEditing(false)
-              setContent(soulContent)
-            }}
-            className="flex-1 bg-secondary text-muted-foreground py-2 rounded-md hover:bg-surface-2 transition-smooth"
-          >
-            Cancel
-          </button>
         </div>
       )}
     </div>
   )
 }
 
-// Identity Tab - structured form editor for IDENTITY.md
-export function IdentityTab({ agent }: { agent: Agent }) {
+// Identity Tab - structured form editor for IDENTITY.md (Form View | Markdown View)
+export function IdentityTab({ agent, onIdentitySaved }: { agent: Agent; onIdentitySaved?: () => void }) {
   const agentId = (agent as any).agentId ?? agent.name.toLowerCase().replace(/\s+/g, '-')
   return (
     <div className="p-6">
       <IdentityEditor
         agentId={agentId}
         agentName={agent.name}
+        onSave={onIdentitySaved}
       />
     </div>
   )

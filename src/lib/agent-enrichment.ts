@@ -6,7 +6,7 @@
  * Markdown is the authority.
  */
 
-import { loadAgentIdentity } from './agent-identity-loader'
+import { loadAgentIdentity } from './agent-markdown'
 import { loadAgentSoul } from './agent-soul-loader'
 
 export interface EnrichedAgent {
@@ -85,7 +85,7 @@ export function enrichAgentWithIdentity(agent: Record<string, unknown>): Record<
       role: identity.role,
       owner: identity.owner,
       purpose: identity.purpose,
-      tone: identity.tone,
+      tone: identity.personalityTone,
       emoji: identity.emoji,
       responsibilities: identity.responsibilities,
       ...(identity.project && { project: identity.project }),

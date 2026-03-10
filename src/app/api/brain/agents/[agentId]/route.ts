@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
-import fs from 'node:fs'
 import path from 'node:path'
 import { requireRole } from '@/lib/auth'
 import { loadAgentDocs, getIdentityWritePath } from '@/lib/agent-docs'
-import { parseIdentityFrontmatter } from '@/lib/identity-frontmatter'
+import { loadAgentIdentity } from '@/lib/agent-markdown'
 import { ensureDirExists } from '@/lib/config'
 import { logger } from '@/lib/logger'
+import fs from 'node:fs'
 
 export async function GET(
   request: NextRequest,
@@ -17,16 +17,32 @@ export async function GET(
   try {
     const { agentId } = await params
     const docs = loadAgentDocs(agentId)
+    const structured = loadAgentIdentity(agentId)
 
-    const identityContent = docs.identity
-    const soulContent = docs.soul
-    const frontmatter = identityContent ? parseIdentityFrontmatter(identityContent) : {}
+    const base = {
+      identity: docs.identity ?? null,
+      soul: docs.soul ?? null,
+      project: structured?.project ?? null,
+      reportsTo: structured?.reports_to ?? null
+    }
 
+    if (!structured) {
+      return NextResponse.json({
+        ...base,
+        identityStructured: null
+      })
+    }
+
+    const { rawMarkdown, project, reports_to, ...rest } = structured
     return NextResponse.json({
-      identity: identityContent ?? null,
-      soul: soulContent ?? null,
-      project: frontmatter.project ?? null,
-      reportsTo: frontmatter.reports_to ?? null
+      ...base,
+      identity: rawMarkdown,
+      identityStructured: {
+        ...rest,
+        rawMarkdown,
+        ...(project && { project }),
+        ...(reports_to && { reportsTo: reports_to })
+      }
     })
   } catch (error) {
     return NextResponse.json({ error: 'Failed to load agent docs' }, { status: 500 })

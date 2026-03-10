@@ -8,6 +8,7 @@ import { requireRole } from '@/lib/auth';
 import { logger } from '@/lib/logger';
 import { getCanonicalSoul, getBootPaths } from '@/lib/mission-control-boot';
 import { loadAgentSoul } from '@/lib/agent-soul-loader';
+import { loadAgentSoul as loadAgentSoulStructured, parseSoulMarkdown } from '@/lib/agent-markdown';
 import { getSoulWritePath } from '@/lib/agent-docs';
 
 function resolveAgentWorkspacePath(workspace: string): string {
@@ -108,6 +109,11 @@ export async function GET(
       logger.warn({ err: error }, 'Could not read soul templates directory');
     }
 
+    const agentConfig = agent.config ? JSON.parse(agent.config) : {};
+    const fsId = agentConfig.openclawId || agent.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    const fromLoader = soulContent ? loadAgentSoulStructured(fsId, agent.name) : null;
+    const soulStructured = fromLoader ?? (soulContent ? { ...parseSoulMarkdown(soulContent), rawMarkdown: soulContent } : null);
+
     return NextResponse.json({
       agent: {
         id: agent.id,
@@ -115,6 +121,14 @@ export async function GET(
         role: agent.role
       },
       soul_content: soulContent,
+      soulStructured: soulStructured ? {
+        philosophy: soulStructured.philosophy,
+        operatingModel: soulStructured.operatingModel,
+        reasoningStyle: soulStructured.reasoningStyle,
+        communicationStyle: soulStructured.communicationStyle,
+        directives: soulStructured.directives,
+        rawMarkdown: soulStructured.rawMarkdown
+      } : null,
       source,
       available_templates: availableTemplates,
       updated_at: agent.updated_at

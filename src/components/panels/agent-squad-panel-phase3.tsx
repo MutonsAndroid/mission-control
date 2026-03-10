@@ -538,6 +538,17 @@ function AgentDetailModalPhase3({
   const [agent, setAgent] = useState(initialAgent)
   const [loadingAgent, setLoadingAgent] = useState(false)
 
+  const refetchAgent = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/agents/${initialAgent.id}`)
+      if (!res.ok) return
+      const data = await res.json()
+      if (data.agent) setAgent(data.agent)
+    } catch {
+      // Keep current agent on error
+    }
+  }, [initialAgent.id])
+
   // Refetch agent when modal opens to ensure we have the latest config from the server
   useEffect(() => {
     let cancelled = false
@@ -772,14 +783,8 @@ function AgentDetailModalPhase3({
           {activeTab === 'overview' && (
             <OverviewTab
               agent={agent}
-              editing={editing}
-              formData={formData}
-              setFormData={setFormData}
-              onSave={handleSave}
               onStatusUpdate={onStatusUpdate}
               onWakeAgent={onWakeAgent}
-              onEdit={() => setEditing(true)}
-              onCancel={() => setEditing(false)}
               heartbeatData={heartbeatData}
               loadingHeartbeat={loadingHeartbeat}
               onPerformHeartbeat={performHeartbeat}
@@ -787,7 +792,7 @@ function AgentDetailModalPhase3({
           )}
           
           {activeTab === 'identity' && (
-            <IdentityTab agent={agent} />
+            <IdentityTab agent={agent} onIdentitySaved={refetchAgent} />
           )}
           {activeTab === 'soul' && (
             <SoulTab
@@ -795,6 +800,7 @@ function AgentDetailModalPhase3({
               soulContent={formData.soul_content}
               templates={soulTemplates}
               onSave={handleSoulSave}
+              onSoulSaved={refetchAgent}
             />
           )}
           {activeTab === 'protocols' && (

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { parseIdentityMarkdown, type ParsedIdentity } from '@/lib/identity-parser'
+import { parseIdentityFrontmatter } from '@/lib/identity-frontmatter'
 import { generateIdentityMarkdown, type IdentityData } from '@/lib/identity-writer'
 
 const INPUT_STYLE =
@@ -12,15 +13,17 @@ interface IdentityEditorProps {
   agentId: string
   agentName: string
   onLoaded?: () => void
+  onSave?: () => void
 }
 
 export function IdentityEditor({
   agentId,
   agentName,
-  onLoaded
+  onLoaded,
+  onSave: onSaved
 }: IdentityEditorProps) {
   const [mode, setMode] = useState<'form' | 'markdown'>('form')
-  const [formData, setFormData] = useState<ParsedIdentity>({
+  const [formData, setFormData] = useState<ParsedIdentity & { project?: string; reports_to?: string; authority_level?: string }>({
     name: '',
     role: '',
     owner: '',
@@ -42,10 +45,33 @@ export function IdentityEditor({
       const res = await fetch(`/api/brain/agents/${encodeURIComponent(agentId)}`)
       if (!res.ok) throw new Error('Failed to load')
       const data = await res.json()
+      const structured = data.identityStructured
       const content = data.identity ?? null
-      const parsed = parseIdentityMarkdown(content)
-      setFormData(parsed)
-      setRawMarkdown(content || '')
+      if (structured) {
+        setFormData({
+          name: structured.name ?? '',
+          role: structured.role ?? '',
+          owner: structured.owner ?? '',
+          purpose: structured.purpose ?? '',
+          tone: structured.personalityTone ?? '',
+          emoji: structured.emoji ?? '',
+          responsibilities: structured.responsibilities ?? [],
+          ...(structured.project && { project: structured.project }),
+          ...(structured.reportsTo && { reports_to: structured.reportsTo }),
+          ...(structured.authority_level && { authority_level: structured.authority_level })
+        })
+        setRawMarkdown(structured.rawMarkdown ?? content ?? '')
+      } else {
+        const parsed = parseIdentityMarkdown(content)
+        const fm = content ? parseIdentityFrontmatter(content) : {}
+        setFormData({
+          ...parsed,
+          ...(fm.project && { project: fm.project }),
+          ...(fm.reports_to && { reports_to: fm.reports_to }),
+          ...(fm.authority_level && { authority_level: fm.authority_level })
+        })
+        setRawMarkdown(content || '')
+      }
       onLoaded?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load identity')
@@ -65,7 +91,11 @@ export function IdentityEditor({
       const content =
         mode === 'markdown'
           ? rawMarkdown
-          : generateIdentityMarkdown(formData as IdentityData)
+          : generateIdentityMarkdown(formData as IdentityData, {
+              ...(formData.project && { project: formData.project }),
+              ...(formData.reports_to && { reports_to: formData.reports_to }),
+              ...(formData.authority_level && { authority_level: formData.authority_level })
+            })
       const res = await fetch(`/api/brain/agents/${encodeURIComponent(agentId)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -77,10 +107,17 @@ export function IdentityEditor({
       }
       if (mode === 'markdown') {
         const parsed = parseIdentityMarkdown(content)
-        setFormData(parsed)
+        const fm = parseIdentityFrontmatter(content)
+        setFormData({
+          ...parsed,
+          ...(fm.project && { project: fm.project }),
+          ...(fm.reports_to && { reports_to: fm.reports_to }),
+          ...(fm.authority_level && { authority_level: fm.authority_level })
+        })
       } else {
         setRawMarkdown(content)
       }
+      onSaved?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to save')
     } finally {

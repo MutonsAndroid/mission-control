@@ -11,12 +11,25 @@ export interface IdentityData {
   tone?: string
   emoji?: string
   responsibilities?: string[]
+  project?: string
+  reports_to?: string
+  authority_level?: string
+}
+
+export interface IdentityFrontmatterOptions {
+  project?: string
+  reports_to?: string
+  authority_level?: string
 }
 
 /**
  * Generate IDENTITY.md in the canonical format.
+ * Optionally prepends YAML frontmatter when frontmatter options are provided.
  */
-export function generateIdentityMarkdown(identity: IdentityData): string {
+export function generateIdentityMarkdown(
+  identity: IdentityData,
+  frontmatter?: IdentityFrontmatterOptions
+): string {
   const name = String(identity.name ?? '').trim()
   const role = String(identity.role ?? '').trim()
   const owner = String(identity.owner ?? '').trim()
@@ -27,7 +40,22 @@ export function generateIdentityMarkdown(identity: IdentityData): string {
     ? identity.responsibilities.filter((r) => String(r).trim())
     : []
 
-  const lines: string[] = [
+  const fm = frontmatter ?? {
+    ...(identity.project && { project: identity.project }),
+    ...(identity.reports_to && { reports_to: identity.reports_to }),
+    ...(identity.authority_level && { authority_level: identity.authority_level }),
+  }
+  const hasFm = fm && (fm.project || fm.reports_to || fm.authority_level)
+
+  const lines: string[] = []
+  if (hasFm) {
+    lines.push('---')
+    if (fm.project) lines.push(`project: ${fm.project}`)
+    if (fm.reports_to) lines.push(`reports_to: ${fm.reports_to}`)
+    if (fm.authority_level) lines.push(`authority_level: ${fm.authority_level}`)
+    lines.push('---', '')
+  }
+  lines.push(
     '# IDENTITY.md — Who Am I?',
     '',
     `- **Name:** ${name}`,
@@ -40,8 +68,8 @@ export function generateIdentityMarkdown(identity: IdentityData): string {
     '---',
     '',
     '## Responsibilities',
-    '',
-  ]
+    ''
+  )
 
   for (const r of responsibilities) {
     lines.push(`- ${r.trim()}`)
