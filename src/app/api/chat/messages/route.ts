@@ -66,25 +66,34 @@ function createChatReply(
   })
 }
 
-function extractReplyText(waitPayload: any): string | null {
-  if (!waitPayload || typeof waitPayload !== 'object') return null
+function extractReplyText(payload: any): string | null {
+  if (!payload || typeof payload !== 'object') return null
+
+  // OpenClaw gateway call agent --expect-final returns result.payloads[].text
+  const payloads = payload?.result?.payloads
+  if (Array.isArray(payloads) && payloads.length > 0) {
+    const texts = payloads
+      .map((p: any) => (typeof p?.text === 'string' ? p.text : null))
+      .filter(Boolean)
+    if (texts.length > 0) return texts.join('\n\n').trim()
+  }
 
   const directCandidates = [
-    waitPayload.text,
-    waitPayload.message,
-    waitPayload.response,
-    waitPayload.output,
-    waitPayload.result,
+    payload.text,
+    payload.message,
+    payload.response,
+    payload.output,
+    payload.result,
   ]
   for (const value of directCandidates) {
     if (typeof value === 'string' && value.trim()) return value.trim()
   }
 
-  if (typeof waitPayload.output === 'object' && waitPayload.output) {
+  if (typeof payload.output === 'object' && payload.output) {
     const nested = [
-      waitPayload.output.text,
-      waitPayload.output.message,
-      waitPayload.output.content,
+      payload.output.text,
+      payload.output.message,
+      payload.output.content,
     ]
     for (const value of nested) {
       if (typeof value === 'string' && value.trim()) return value.trim()
@@ -301,50 +310,137 @@ export async function POST(request: NextRequest) {
             }
           }
         } else {
-          try {
-            const invokeParams: any = {
-              message: `Message from ${from}: ${content}`,
-              idempotencyKey: `mc-${messageId}-${Date.now()}`,
-              deliver: false,
-            }
-            if (sessionKey) invokeParams.sessionKey = sessionKey
-            else invokeParams.agentId = openclawAgentId
+          const isCoordinator = typeof conversation_id === 'string' && conversation_id.startsWith('coord:')
+          const isSampson = to && String(to).toLowerCase() === 'sampson'
+          const shouldWaitForReply = isCoordinator || isSampson
 
+          const invokeParams: any = {
+            message: `Message from ${from}: ${content}`,
+            idempotencyKey: `mc-${messageId}-${Date.now()}`,
+            deliver: false,
+          }
+          if (sessionKey) invokeParams.sessionKey = sessionKey
+          else invokeParams.agentId = openclawAgentId
+
+          const agentCallArgs = [
+            'gateway',
+            'call',
+            'agent',
+            ...(shouldWaitForReply ? ['--expect-final'] : []),
+            '--timeout',
+            shouldWaitForReply ? '60000' : '10000',
+            '--params',
+            JSON.stringify(invokeParams),
+            '--json',
+          ]
+
+          // For Coordinator/Sampson: emit "Processing" immediately so UI shows feedback during the blocking call
+          if (shouldWaitForReply) {
+            const replyAgentName = isCoordinator ? COORDINATOR_AGENT : (to as string)
+            try {
+              createChatReply(
+                db,
+                workspaceId,
+                conversation_id,
+                replyAgentName,
+                from,
+                isCoordinator ? 'Received. I am coordinating downstream agents now.' : 'Received. Processing your message.',
+                'status',
+                { status: 'processing' }
+              )
+            } catch (e) {
+              logger.error({ err: e }, 'Failed to create processing status reply')
+            }
+          }
+
+          try {
             const invokeResult = await runOpenClaw(
-              [
-                'gateway',
-                'call',
-                'agent',
-                '--timeout',
-                '10000',
-                '--params',
-                JSON.stringify(invokeParams),
-                '--json',
-              ],
-              { timeoutMs: 12000 }
+              agentCallArgs,
+              { timeoutMs: shouldWaitForReply ? 65000 : 12000 }
             )
-            const acceptedPayload = parseGatewayJson(invokeResult.stdout)
-            forwardInfo.delivered = true
+            const payload = parseGatewayJson(invokeResult.stdout)
+            const status = String(payload?.status || '').toLowerCase()
+            forwardInfo.delivered = status === 'accepted' || status === 'ok'
             forwardInfo.session = sessionKey || openclawAgentId || undefined
-            if (typeof acceptedPayload?.runId === 'string' && acceptedPayload.runId) {
-              forwardInfo.runId = acceptedPayload.runId
+            if (typeof payload?.runId === 'string' && payload.runId) {
+              forwardInfo.runId = payload.runId
+            }
+
+            // When using --expect-final, we get the full response including result.payloads[].text
+            if (shouldWaitForReply && forwardInfo.delivered) {
+              const replyAgentName = isCoordinator ? COORDINATOR_AGENT : (to as string)
+
+              if (status === 'ok' && payload?.result) {
+                const replyText = extractReplyText(payload)
+                if (replyText) {
+                  createChatReply(
+                    db,
+                    workspaceId,
+                    conversation_id,
+                    replyAgentName,
+                    from,
+                    replyText,
+                    'text',
+                    { status: 'completed', runId: forwardInfo.runId }
+                  )
+                } else {
+                  createChatReply(
+                    db,
+                    workspaceId,
+                    conversation_id,
+                    replyAgentName,
+                    from,
+                    'Execution completed. No textual response was returned.',
+                    'status',
+                    { status: 'completed', runId: forwardInfo.runId }
+                  )
+                }
+              } else if (status === 'accepted') {
+                // Fire-and-forget path (shouldn't happen with --expect-final, but handle)
+                createChatReply(
+                  db,
+                  workspaceId,
+                  conversation_id,
+                  replyAgentName,
+                  from,
+                  isCoordinator ? 'Received. I am coordinating downstream agents now.' : 'Received. Processing your message.',
+                  'status',
+                  { status: 'accepted', runId: forwardInfo.runId }
+                )
+              }
             }
           } catch (err) {
             // OpenClaw may return accepted JSON on stdout but still emit a late stderr warning.
             // Treat accepted runs as successful delivery.
             const maybeStdout = String((err as any)?.stdout || '')
-            const acceptedPayload = parseGatewayJson(maybeStdout)
-            if (maybeStdout.includes('"status": "accepted"') || maybeStdout.includes('"status":"accepted"')) {
+            const payload = parseGatewayJson(maybeStdout)
+            const status = String(payload?.status || '').toLowerCase()
+            if (status === 'accepted' || status === 'ok') {
               forwardInfo.delivered = true
               forwardInfo.session = sessionKey || openclawAgentId || undefined
-              if (typeof acceptedPayload?.runId === 'string' && acceptedPayload.runId) {
-                forwardInfo.runId = acceptedPayload.runId
+              if (typeof payload?.runId === 'string' && payload.runId) {
+                forwardInfo.runId = payload.runId
+              }
+              if (shouldWaitForReply && status === 'ok' && payload?.result) {
+                const replyAgentName = isCoordinator ? COORDINATOR_AGENT : (to as string)
+                const replyText = extractReplyText(payload)
+                if (replyText) {
+                  createChatReply(
+                    db,
+                    workspaceId,
+                    conversation_id,
+                    replyAgentName,
+                    from,
+                    replyText,
+                    'text',
+                    { status: 'completed', runId: forwardInfo.runId }
+                  )
+                }
               }
             } else {
               forwardInfo.reason = 'gateway_send_failed'
               logger.error({ err }, 'Failed to forward message via gateway')
 
-              // For coordinator messages, emit visible status when send fails
               if (typeof conversation_id === 'string' && conversation_id.startsWith('coord:')) {
                 try {
                   createChatReply(
@@ -360,128 +456,6 @@ export async function POST(request: NextRequest) {
                 } catch (e) {
                   logger.error({ err: e }, 'Failed to create gateway failure status reply')
                 }
-              }
-            }
-          }
-
-          // Coordinator or Sampson: show visible feedback and wait for reply
-          const isCoordinator = typeof conversation_id === 'string' && conversation_id.startsWith('coord:')
-          const isSampson = to && String(to).toLowerCase() === 'sampson'
-          const shouldWaitForReply = (isCoordinator || isSampson) && forwardInfo.delivered
-
-          if (shouldWaitForReply) {
-            const replyAgent = isCoordinator ? COORDINATOR_AGENT : (to as string)
-            const statusMessage = isCoordinator
-              ? 'Received. I am coordinating downstream agents now.'
-              : 'Received. Processing your message.'
-            try {
-              createChatReply(
-                db,
-                workspaceId,
-                conversation_id,
-                replyAgent,
-                from,
-                statusMessage,
-                'status',
-                { status: 'accepted', runId: forwardInfo.runId || null }
-              )
-            } catch (e) {
-              logger.error({ err: e }, 'Failed to create accepted status reply')
-            }
-
-            // Best effort: wait briefly and surface completion/error feedback.
-            if (forwardInfo.runId) {
-              try {
-                const waitResult = await runOpenClaw(
-                  [
-                    'gateway',
-                    'call',
-                    'agent.wait',
-                    '--timeout',
-                    '8000',
-                    '--params',
-                    JSON.stringify({ runId: forwardInfo.runId, timeoutMs: 6000 }),
-                    '--json',
-                  ],
-                  { timeoutMs: 9000 }
-                )
-
-                const waitPayload = parseGatewayJson(waitResult.stdout)
-                const waitStatus = String(waitPayload?.status || '').toLowerCase()
-
-                const replyAgentName = isCoordinator ? COORDINATOR_AGENT : (to as string)
-                if (waitStatus === 'error') {
-                  const reason =
-                    typeof waitPayload?.error === 'string'
-                      ? waitPayload.error
-                      : 'Unknown runtime error'
-                  createChatReply(
-                    db,
-                    workspaceId,
-                    conversation_id,
-                    replyAgentName,
-                    from,
-                    `I received your message, but execution failed: ${reason}`,
-                    'status',
-                    { status: 'error', runId: forwardInfo.runId }
-                  )
-                } else if (waitStatus === 'timeout') {
-                  createChatReply(
-                    db,
-                    workspaceId,
-                    conversation_id,
-                    replyAgentName,
-                    from,
-                    'I received your message and I am still processing it. I will post results as soon as execution completes.',
-                    'status',
-                    { status: 'processing', runId: forwardInfo.runId }
-                  )
-                } else {
-                  const replyText = extractReplyText(waitPayload)
-                  if (replyText) {
-                    createChatReply(
-                      db,
-                      workspaceId,
-                      conversation_id,
-                      replyAgentName,
-                      from,
-                      replyText,
-                      'text',
-                      { status: waitStatus || 'completed', runId: forwardInfo.runId }
-                    )
-                  } else {
-                    createChatReply(
-                      db,
-                      workspaceId,
-                      conversation_id,
-                      replyAgentName,
-                      from,
-                      'Execution accepted and completed. No textual response payload was returned by the runtime.',
-                      'status',
-                      { status: waitStatus || 'completed', runId: forwardInfo.runId }
-                    )
-                  }
-                }
-              } catch (waitErr) {
-                const maybeWaitStdout = String((waitErr as any)?.stdout || '')
-                const maybeWaitStderr = String((waitErr as any)?.stderr || '')
-                const waitPayload = parseGatewayJson(maybeWaitStdout)
-                const reason =
-                  typeof waitPayload?.error === 'string'
-                    ? waitPayload.error
-                    : (maybeWaitStderr || maybeWaitStdout || 'Unable to read completion status from coordinator runtime.').trim()
-
-                const replyAgentName = isCoordinator ? COORDINATOR_AGENT : (to as string)
-                createChatReply(
-                  db,
-                  workspaceId,
-                  conversation_id,
-                  replyAgentName,
-                  from,
-                  `I received your message, but I could not retrieve completion output yet: ${reason}`,
-                  'status',
-                  { status: 'unknown', runId: forwardInfo.runId }
-                )
               }
             }
           }
